@@ -1,0 +1,7 @@
+{
+  "apple": {
+    "description": "Its a fruit",
+    "name": "Apple",
+    "type": "Image"
+  }
+}

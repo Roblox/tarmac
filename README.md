@@ -9,3 +9,6 @@ Tarmac paves the way to hermetic place builds when used with tools like Rojo.
 - Rojo user plugin
 	- Reads asset manifest to figure out mapping
 	- Maps IDs and file paths to assets uploaded by tool
+
+## License
+Tarmac is available under the MIT license. See [LICENSE.txt](LICENSE.txt) for details.
