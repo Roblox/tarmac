@@ -13,14 +13,20 @@ use crate::{
 #[derive(Debug, StructOpt)]
 #[structopt(about = "A tool to help manage Roblox assets from the command line")]
 struct Options {
+    /// The authentication cookie for Tarmac to use. If not specified, Tarmac
+    /// will attempt to use the cookie from the Roblox Studio installation on
+    /// the system.
+    #[structopt(long)]
+    auth: Option<String>,
+
     #[structopt(subcommand)]
     command: Subcommand,
 }
 
 #[derive(Debug, StructOpt)]
 enum Subcommand {
-    /// Upload a single image to Roblox.com. Prints the asset ID of the resulting
-    /// Image asset to stdout.
+    /// Upload a single image to Roblox.com. Prints the asset ID of the
+    /// resulting Image asset to stdout.
     UploadImage(UploadImage),
 }
 
@@ -45,17 +51,27 @@ fn main() {
 
     match &options.command {
         Subcommand::UploadImage(upload_options) => {
-            let auth_cookie = get_auth_cookie().expect("no auth cookie");
-            let mut client = RobloxApiClient::new(auth_cookie);
+            let auth = options
+                .auth
+                .clone()
+                .or_else(get_auth_cookie)
+                .expect("no auth cookie found");
+
+            let image_data = fs::read(&upload_options.path).expect("couldn't read input file");
+
+            let mut client = RobloxApiClient::new(auth);
 
             let upload_data = ImageUploadData {
-                image_data: fs::read(&upload_options.path).unwrap(),
+                image_data,
                 name: &upload_options.name,
                 description: &upload_options.description,
             };
 
-            let response = client.upload_image(upload_data).expect("request failed");
+            let response = client
+                .upload_image(upload_data)
+                .expect("Roblox API request failed");
 
+            eprintln!("Image uploaded successfully!");
             println!("{}", response.backing_asset_id);
         }
     }
