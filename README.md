@@ -1,4 +1,6 @@
-# Roblox Asset Manager
+# Tarmac
+Tarmac paves the way to hermetic place builds when used with tools like Rojo.
+
 - Tool to crawl tree for asset files
 	- Upload, copy, etc, assets into place they're being deployed
 		- Content folder when local
@@ -7,16 +9,3 @@
 - Rojo user plugin
 	- Reads asset manifest to figure out mapping
 	- Maps IDs and file paths to assets uploaded by tool
-
-## Name Ideas
-
-### RAM (Roblox Asset Manager)
-* Overloaded name
-
-### Roc
-* Basically a dragon but a bird instead
-* Really big, carries stuff
-
-### Tarmac
-* Like a runway
-* Good metaphor for shipping things
