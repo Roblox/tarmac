@@ -13,8 +13,10 @@ homepage = "https://github.com/rojo-rbx/tarmac"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-reqwest = "0.9.20"
+env_logger = "0.7.0"
 log = "0.4.8"
+reqwest = "0.9.20"
+serde = { version = "1.0", features = ["derive"] }
 structopt = { version = "0.3", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
