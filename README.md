@@ -7,3 +7,16 @@
 - Rojo user plugin
 	- Reads asset manifest to figure out mapping
 	- Maps IDs and file paths to assets uploaded by tool
+
+## Name Ideas
+
+### RAM (Roblox Asset Manager)
+* Overloaded name
+
+### Roc
+* Basically a dragon but a bird instead
+* Really big, carries stuff
+
+### Tarmac
+* Like a runway
+* Good metaphor for shipping things
