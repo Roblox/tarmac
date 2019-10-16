@@ -1,8 +1,29 @@
 # Tarmac
-Tarmac paves the way to hermetic place builds when used with tools like Rojo.
+Tarmac is a tool that manages assets for Roblox projects on the command line. It paves the way for hermetic place builds when used with tools like Rojo.
+
+## Installation
+Tarmac requires Rust 1.37+. When releases are built, pre-built binaries for Windows and macOS will be available.
+
+```bash
+cargo install --git https://github.com/rojo-rbx/tarmac.git
+```
 
 ## Usage
-Tarmac is still early, but is already starting to be useful. For full usage, use `tarmac --help`.
+Tarmac is still an early work in progress, but is starting to be useful. For full usage, use `tarmac --help`.
+
+### Syncing a project
+Tarmac can automatically discover and upload the images used in your project.
+
+```bash
+tarmac sync
+```
+
+Tarmac will upload any assets that have changed to Roblox.com.
+
+It'll also create two files next to each asset:
+
+* A `.tarmac.json` file, which contains the uploaded asset ID and a hash of the file's contents.
+* A `.lua` file, which is a Roblox `ModuleScript` that can be imported to get the URL of the uploaded asset.
 
 ### Upload an Image
 ```bash
@@ -13,10 +34,10 @@ Tarmac will print the ID of the uploaded image to stdout, and any status message
 
 ## Vision
 - Tool to crawl tree for asset files (`tarmac`)
-	- Upload, copy, etc, assets into place they're being deployed
-		- Content folder when local
-		- Roblox website when deploying to production
-	- Produce asset manifest in root of project
+	- Upload and copy assets
+		- Assets will be in the `content` folder during development
+		- Assets will be uploaded to Roblox.com when deploying
+	- Produce asset manifests detailing what the status of each asset is
 - Rojo user plugin (`tarmac-rojo`)
 	- Reads asset manifest to figure out mapping
 	- Maps IDs and file paths to assets uploaded by tool
