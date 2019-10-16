@@ -49,7 +49,13 @@ impl RobloxApiClient {
         })?;
 
         if response.status().is_success() {
-            let body: UploadResponse = response.json()?;
+            let body: UploadResponse = match response.json() {
+                Ok(body) => body,
+                Err(err) => {
+                    panic!("Got malformed API response: {}", err);
+                }
+            };
+
             Ok(body)
         } else {
             let body = response.text().unwrap();
