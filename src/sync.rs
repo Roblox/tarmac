@@ -14,17 +14,19 @@ pub fn sync(path: &Path, auth: String) -> io::Result<()> {
 
     for entry in WalkDir::new(path) {
         let entry = entry?;
-        let path = entry.path();
+        let asset_path = entry.path();
 
-        if is_image_asset(path) {
-            sync_image(&mut api_client, path)?;
+        if is_image_asset(asset_path) {
+            sync_image(&mut api_client, asset_path, path)?;
         }
     }
 
     Ok(())
 }
 
-fn sync_image(api_client: &mut RobloxApiClient, path: &Path) -> io::Result<()> {
+fn sync_image(api_client: &mut RobloxApiClient, path: &Path, start_dir: &Path) -> io::Result<()> {
+    let relative_path = path.strip_prefix(start_dir).unwrap_or(path);
+
     let manifest_path = manifest_path_for_asset(path);
     let manifest = read_manifest(&manifest_path)?;
 
@@ -32,6 +34,8 @@ fn sync_image(api_client: &mut RobloxApiClient, path: &Path) -> io::Result<()> {
     let asset_hash = generate_asset_hash(&asset_content);
 
     let manifest = if need_to_upload(manifest.as_ref(), &asset_hash) {
+        println!("Uploading {}", relative_path.display());
+
         let name = path.file_stem().unwrap().to_str().unwrap();
         let response = upload_image(api_client, name, asset_content);
 
