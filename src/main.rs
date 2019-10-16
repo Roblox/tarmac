@@ -54,7 +54,7 @@ struct UploadImage {
 struct Sync {
     /// The path to the assets to be synced with Roblox.com. Defaults to the
     /// current working directory.
-    path: Option<PathBuf>,
+    paths: Vec<PathBuf>,
 }
 
 fn main() {
@@ -88,10 +88,11 @@ fn main() {
             println!("{}", response.backing_asset_id);
         }
         Subcommand::Sync(sync_options) => {
-            let path = sync_options
-                .path
-                .clone()
-                .unwrap_or_else(|| env::current_dir().unwrap());
+            let paths = if sync_options.paths.is_empty() {
+                vec![env::current_dir().unwrap()]
+            } else {
+                sync_options.paths.clone()
+            };
 
             let auth = options
                 .auth
@@ -99,7 +100,7 @@ fn main() {
                 .or_else(get_auth_cookie)
                 .expect("no auth cookie found");
 
-            sync(&path, auth).unwrap();
+            sync(&paths, auth).unwrap();
         }
     }
 }

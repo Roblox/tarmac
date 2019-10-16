@@ -9,15 +9,19 @@ use walkdir::WalkDir;
 
 use crate::roblox_web_api::{ImageUploadData, RobloxApiClient, UploadResponse};
 
-pub fn sync(path: &Path, auth: String) -> io::Result<()> {
+pub fn sync<P: AsRef<Path>>(paths: &[P], auth: String) -> io::Result<()> {
     let mut api_client = RobloxApiClient::new(auth);
 
-    for entry in WalkDir::new(path) {
-        let entry = entry?;
-        let asset_path = entry.path();
+    for path in paths {
+        let path = path.as_ref();
 
-        if is_image_asset(asset_path) {
-            sync_image(&mut api_client, asset_path, path)?;
+        for entry in WalkDir::new(path) {
+            let entry = entry?;
+            let asset_path = entry.path();
+
+            if is_image_asset(asset_path) {
+                sync_image(&mut api_client, asset_path, path)?;
+            }
         }
     }
 
