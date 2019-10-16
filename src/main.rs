@@ -1,13 +1,15 @@
 mod auth_cookie;
 mod roblox_web_api;
+mod sync;
 
-use std::{fs, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
 use structopt::StructOpt;
 
 use crate::{
     auth_cookie::get_auth_cookie,
     roblox_web_api::{ImageUploadData, RobloxApiClient},
+    sync::sync,
 };
 
 #[derive(Debug, StructOpt)]
@@ -28,6 +30,10 @@ enum Subcommand {
     /// Upload a single image to Roblox.com. Prints the asset ID of the
     /// resulting Image asset to stdout.
     UploadImage(UploadImage),
+
+    /// Sync your Tarmac asset project up to Roblox.com, uploading any assets
+    /// that have changed.
+    Sync(Sync),
 }
 
 #[derive(Debug, StructOpt)]
@@ -42,6 +48,13 @@ struct UploadImage {
     /// The description to give to the resulting Decal asset.
     #[structopt(long, default_value = "Uploaded by Tarmac.")]
     description: String,
+}
+
+#[derive(Debug, StructOpt)]
+struct Sync {
+    /// The path to the assets to be synced with Roblox.com. Defaults to the
+    /// current working directory.
+    path: Option<PathBuf>,
 }
 
 fn main() {
@@ -73,6 +86,20 @@ fn main() {
 
             eprintln!("Image uploaded successfully!");
             println!("{}", response.backing_asset_id);
+        }
+        Subcommand::Sync(sync_options) => {
+            let path = sync_options
+                .path
+                .clone()
+                .unwrap_or_else(|| env::current_dir().unwrap());
+
+            let auth = options
+                .auth
+                .clone()
+                .or_else(get_auth_cookie)
+                .expect("no auth cookie found");
+
+            sync(&path, auth).unwrap();
         }
     }
 }
