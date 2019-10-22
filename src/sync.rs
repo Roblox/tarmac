@@ -1,5 +1,5 @@
 use std::{
-    fs, io,
+    env, fs, io,
     path::{Path, PathBuf},
 };
 
@@ -7,9 +7,24 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
-use crate::roblox_web_api::{ImageUploadData, RobloxApiClient, UploadResponse};
+use crate::{
+    auth_cookie::get_auth_cookie,
+    options::{GlobalOptions, Sync},
+    roblox_web_api::{ImageUploadData, RobloxApiClient, UploadResponse},
+};
 
-pub fn sync<P: AsRef<Path>>(paths: &[P], auth: String) -> io::Result<()> {
+pub fn sync(global: GlobalOptions, options: Sync) -> io::Result<()> {
+    let auth = global
+        .auth
+        .or_else(get_auth_cookie)
+        .expect("no auth cookie found");
+
+    let paths = if options.paths.is_empty() {
+        vec![env::current_dir().unwrap()]
+    } else {
+        options.paths
+    };
+
     let mut api_client = RobloxApiClient::new(auth);
 
     for path in paths {

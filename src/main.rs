@@ -5,7 +5,7 @@ mod options;
 mod roblox_web_api;
 mod sync;
 
-use std::{env, fs};
+use std::fs;
 
 use structopt::StructOpt;
 
@@ -21,7 +21,7 @@ fn main() {
 
     let options = Options::from_args();
 
-    match &options.command {
+    match options.command {
         Subcommand::UploadImage(upload_options) => {
             let auth = options
                 .global
@@ -48,20 +48,7 @@ fn main() {
             println!("{}", response.backing_asset_id);
         }
         Subcommand::Sync(sync_options) => {
-            let paths = if sync_options.paths.is_empty() {
-                vec![env::current_dir().unwrap()]
-            } else {
-                sync_options.paths.clone()
-            };
-
-            let auth = options
-                .global
-                .auth
-                .clone()
-                .or_else(get_auth_cookie)
-                .expect("no auth cookie found");
-
-            sync(&paths, auth).unwrap();
+            sync(options.global, sync_options).unwrap();
         }
     }
 }
