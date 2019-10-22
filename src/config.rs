@@ -13,9 +13,6 @@ static CONFIG_FILENAME: &str = "tarmac.toml";
 pub struct Config {
     #[serde(default)]
     default: ConfigEntry,
-
-    #[serde(flatten)]
-    paths: HashMap<String, ConfigEntry>,
 }
 
 impl Config {
@@ -70,4 +67,5 @@ impl Default for ConfigEntry {
 pub enum CodegenKind {
     None,
     AssetUrl,
+    Slice,
 }
