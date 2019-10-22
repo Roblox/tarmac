@@ -1,20 +1,13 @@
 mod auth_cookie;
+mod commands;
 mod config;
 mod manifest;
 mod options;
 mod roblox_web_api;
-mod sync;
-
-use std::fs;
 
 use structopt::StructOpt;
 
-use crate::{
-    auth_cookie::get_auth_cookie,
-    options::{Options, Subcommand},
-    roblox_web_api::{ImageUploadData, RobloxApiClient},
-    sync::sync,
-};
+use crate::options::{Options, Subcommand};
 
 fn main() {
     env_logger::init();
@@ -23,32 +16,10 @@ fn main() {
 
     match options.command {
         Subcommand::UploadImage(upload_options) => {
-            let auth = options
-                .global
-                .auth
-                .clone()
-                .or_else(get_auth_cookie)
-                .expect("no auth cookie found");
-
-            let image_data = fs::read(&upload_options.path).expect("couldn't read input file");
-
-            let mut client = RobloxApiClient::new(auth);
-
-            let upload_data = ImageUploadData {
-                image_data,
-                name: &upload_options.name,
-                description: &upload_options.description,
-            };
-
-            let response = client
-                .upload_image(upload_data)
-                .expect("Roblox API request failed");
-
-            eprintln!("Image uploaded successfully!");
-            println!("{}", response.backing_asset_id);
+            commands::upload_image(options.global, upload_options);
         }
         Subcommand::Sync(sync_options) => {
-            sync(options.global, sync_options).unwrap();
+            commands::sync(options.global, sync_options).unwrap();
         }
     }
 }
