@@ -9,11 +9,11 @@ use walkdir::WalkDir;
 
 use crate::{
     auth_cookie::get_auth_cookie,
-    options::{GlobalOptions, Sync},
+    options::{GlobalOptions, SyncOptions},
     roblox_web_api::{ImageUploadData, RobloxApiClient, UploadResponse},
 };
 
-pub fn sync(global: GlobalOptions, options: Sync) -> io::Result<()> {
+pub fn sync(global: GlobalOptions, options: SyncOptions) -> io::Result<()> {
     let auth = global
         .auth
         .or_else(get_auth_cookie)

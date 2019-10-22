@@ -25,15 +25,15 @@ pub struct GlobalOptions {
 pub enum Subcommand {
     /// Upload a single image to Roblox.com. Prints the asset ID of the
     /// resulting Image asset to stdout.
-    UploadImage(UploadImage),
+    UploadImage(UploadImageOptions),
 
     /// Sync your Tarmac asset project up to Roblox.com, uploading any assets
     /// that have changed.
-    Sync(Sync),
+    Sync(SyncOptions),
 }
 
 #[derive(Debug, StructOpt)]
-pub struct UploadImage {
+pub struct UploadImageOptions {
     /// The path to the image to upload.
     pub path: PathBuf,
 
@@ -47,7 +47,7 @@ pub struct UploadImage {
 }
 
 #[derive(Debug, StructOpt)]
-pub struct Sync {
+pub struct SyncOptions {
     /// Whether Tarmac should attempt to pack images into spritesheets when
     /// possible.
     #[structopt(long)]
