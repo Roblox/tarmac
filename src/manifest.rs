@@ -16,8 +16,24 @@ pub struct Manifest {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ManifestAsset {
+    /// The asset ID corresponding to this asset on Roblox.com the last time it
+    /// was uploaded, if it's ever been uploaded.
     pub uploaded_id: Option<u64>,
+
+    /// The hexadecimal-encoded SHA-256 hash of the contents of the image the
+    /// last time it was uploaded, if it's ever been uploaded.
     pub uploaded_hash: Option<String>,
+
+    /// If this asset is contained as an image slice of another asset, this will
+    /// contain the slice of the larger image this asset is from.
+    pub uploaded_subslice: Option<ImageSlice>,
+}
+
+/// A slice of an image, encoded the same way that Roblox's 'Rect' type is.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageSlice {
+    pub min: (u32, u32),
+    pub max: (u32, u32),
 }
 
 #[derive(Debug, Snafu)]
