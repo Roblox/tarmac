@@ -65,6 +65,8 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
         session.feed(&current_dir, &path)?;
     }
 
+    session.create_spritesheets()?;
+
     match options.target {
         SyncTarget::Roblox => {
             let auth = global
@@ -215,6 +217,15 @@ impl SyncSession {
         } else {
             Ok(None)
         }
+    }
+
+    fn create_spritesheets(&mut self) -> Result<(), SyncError> {
+        // TODO: Gather up all assets that are marked as being able to be part
+        // of a spritesheet, then build spritesheets for each of them.
+        //
+        // This will probably require some design work for defining spritesheet
+        // groups so that relevant images can be grouped together.
+        Ok(())
     }
 
     fn sync_to_roblox(&mut self, auth: String) -> Result<(), SyncError> {
