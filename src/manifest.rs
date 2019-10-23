@@ -29,11 +29,12 @@ pub struct ManifestAsset {
     pub uploaded_subslice: Option<ImageSlice>,
 }
 
-/// A slice of an image, encoded the same way that Roblox's 'Rect' type is.
+/// A slice of an image, encoded the same way that properties on Roblox's image
+/// GUI objects are.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageSlice {
-    pub min: (u32, u32),
-    pub max: (u32, u32),
+    pub offset: (u32, u32),
+    pub size: (u32, u32),
 }
 
 #[derive(Debug, Snafu)]

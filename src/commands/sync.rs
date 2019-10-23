@@ -282,7 +282,33 @@ impl SyncSession {
                     }
                 }
                 CodegenKind::Slice => {
-                    unimplemented!("'slice' codegen type");
+                    if let Some(id) = asset.manifest_entry.uploaded_id {
+                        let path = &asset.path.with_extension(".lua");
+
+                        let contents = match &asset.manifest_entry.uploaded_subslice {
+                            Some(slice) => format!(
+                                "return {{\
+                                 \n\tImage = \"rbxassetid://{}\",\
+                                 \n\tImageRectOffset = Vector2.new({}, {}),\
+                                 \n\tImageRectSize = Vector2.new({}, {}),\
+                                 }}",
+                                id, slice.offset.0, slice.offset.1, slice.size.0, slice.size.1,
+                            ),
+                            None => format!(
+                                "return {{\
+                                 \n\tImage = \"rbxassetid://{}\",\
+                                 }}",
+                                id
+                            ),
+                        };
+
+                        fs::write(path, contents).context(error::Io { path })?;
+                    } else {
+                        log::warn!(
+                            "Skipping codegen for asset {} since it was not uploaded.",
+                            asset.display_path
+                        );
+                    }
                 }
             }
         }
