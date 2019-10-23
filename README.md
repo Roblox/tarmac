@@ -15,15 +15,35 @@ Tarmac is still an early work in progress, but is starting to be useful. For ful
 Tarmac can automatically discover and upload the images used in your project.
 
 ```bash
-tarmac sync
+tarmac sync --target roblox
 ```
 
 Tarmac will upload any assets that have changed to Roblox.com.
 
-It'll also create two files next to each asset:
+It'll also create a central manifest file named `tarmac-manifest.toml`. It has all the files it found, their asset IDs, and the hash of their contents. This manifest can be processed by other tools to update assets from model files, Rojo projects, and more, but currently isn't used by anything besides Tarmac itself.
 
-* A `.tarmac.json` file, which contains the uploaded asset ID and a hash of the file's contents.
-* A `.lua` file, which is a Roblox `ModuleScript` that can be imported to get the URL of the uploaded asset.
+Tarmac can also optionally generate code to make importing images from Lua code more convenient. To do that, make a `tarmac.toml` file in your project:
+
+```toml
+[default]
+# Options are 'none' (default), 'asset-url', and 'slice'
+codegen = "asset-url"
+```
+
+Run Tarmac again and it'll create Lua files that look like this:
+
+```lua
+return "rbxassetid://12345678"
+```
+
+These files will be turned into `ModuleScript` objects by a tool like Rojo and make it incredibly easy to use assets in your code:
+
+```lua
+local ImageA = require(Assets.A)
+
+local decal = Instance.new("Decal")
+decal.Texture = ImageA
+```
 
 ### Upload an Image
 ```bash
