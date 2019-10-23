@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fs, io,
     path::{Path, PathBuf},
 };
@@ -9,14 +8,14 @@ use snafu::{ResultExt, Snafu};
 
 static CONFIG_FILENAME: &str = "tarmac.toml";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
-    default: ConfigEntry,
+    pub default: ConfigEntry,
 }
 
 impl Config {
-    pub fn read_from_folder<P: AsRef<Path>>(folder_path: P) -> Result<Option<Config>, ConfigError> {
+    pub fn read_from_folder<P: AsRef<Path>>(folder_path: P) -> Result<Option<Self>, ConfigError> {
         let folder_path = folder_path.as_ref();
         let file_path = &folder_path.join(CONFIG_FILENAME);
 
@@ -30,28 +29,15 @@ impl Config {
 
         let config = toml::from_slice(&contents).context(Toml { file_path })?;
 
-        Ok(config)
+        Ok(Some(config))
     }
 }
 
-#[derive(Debug, Snafu)]
-pub enum ConfigError {
-    Toml {
-        file_path: PathBuf,
-        source: toml::de::Error,
-    },
-
-    Io {
-        file_path: PathBuf,
-        source: io::Error,
-    },
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConfigEntry {
-    codegen: CodegenKind,
-    can_spritesheet: bool,
+    pub codegen: CodegenKind,
+    pub can_spritesheet: bool,
 }
 
 impl Default for ConfigEntry {
@@ -68,4 +54,17 @@ pub enum CodegenKind {
     None,
     AssetUrl,
     Slice,
+}
+
+#[derive(Debug, Snafu)]
+pub enum ConfigError {
+    Toml {
+        file_path: PathBuf,
+        source: toml::de::Error,
+    },
+
+    Io {
+        file_path: PathBuf,
+        source: io::Error,
+    },
 }
