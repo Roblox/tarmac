@@ -34,7 +34,7 @@ impl Config {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(default, rename_all = "kebab-case")]
 pub struct ConfigEntry {
     pub codegen: CodegenKind,
     pub can_spritesheet: bool,
@@ -50,6 +50,7 @@ impl Default for ConfigEntry {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum CodegenKind {
     None,
     AssetUrl,

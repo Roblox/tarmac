@@ -8,7 +8,7 @@ use snafu::ResultExt;
 
 use crate::{
     auth_cookie::get_auth_cookie,
-    config::{Config, ConfigEntry},
+    config::{CodegenKind, Config, ConfigEntry},
     manifest::{Manifest, ManifestAsset},
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
@@ -80,6 +80,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
     log::trace!("Session: {:#?}", session);
 
     session.write_manifest()?;
+    session.codegen()?;
 
     Ok(())
 }
@@ -259,6 +260,34 @@ impl SyncSession {
 
     fn sync_to_content_folder(&mut self) -> Result<(), SyncError> {
         unimplemented!("TODO: Implement syncing to the content folder");
+    }
+
+    fn codegen(&self) -> Result<(), SyncError> {
+        for asset in &self.assets {
+            log::trace!("Running codegen for {}", asset.display_path);
+
+            match asset.config.codegen {
+                CodegenKind::None => {}
+                CodegenKind::AssetUrl => {
+                    if let Some(id) = asset.manifest_entry.uploaded_id {
+                        let path = &asset.path.with_extension(".lua");
+                        let contents = format!("return \"rbxassetid://{}\"", id);
+
+                        fs::write(path, contents).context(error::Io { path })?;
+                    } else {
+                        log::warn!(
+                            "Skipping codegen for asset {} since it was not uploaded.",
+                            asset.display_path
+                        );
+                    }
+                }
+                CodegenKind::Slice => {
+                    unimplemented!("'slice' codegen type");
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn write_manifest(&self) -> Result<(), SyncError> {
