@@ -1,12 +1,13 @@
 use std::{
     env, fs,
-    path::{self, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use sha2::{Digest, Sha256};
 use snafu::ResultExt;
 
 use crate::{
+    asset_name::AssetName,
     auth_cookie::get_auth_cookie,
     config::{CodegenKind, Config, ConfigEntry},
     manifest::{Manifest, ManifestAsset},
@@ -109,12 +110,8 @@ struct SyncAsset {
     /// The absolute path to the asset on disk.
     path: PathBuf,
 
-    /// The cleaned up, platform-independent path to this asset, relative to the
-    /// sync session's root path.
-    ///
-    /// This path will be used as a key into the Tarmac manifest and is used
-    /// across runs to preserve the identity of an asset.
-    display_path: String,
+    /// A path-derived, unique name for this asset.
+    name: AssetName,
 
     /// Hierarchical configuration picked up when discovering this asset.
     ///
@@ -156,19 +153,19 @@ impl SyncSession {
 
         if meta.is_file() {
             if is_image_asset(path) {
-                let display_path = spruce_up_path(&self.root_path, path);
+                let name = AssetName::from_paths(&self.root_path, path);
 
                 let manifest_entry = self
                     .source_manifest
                     .assets
-                    .get(&display_path)
+                    .get(&name)
                     .cloned()
                     .unwrap_or_default();
 
-                log::trace!("Adding asset {}", display_path);
+                log::trace!("Adding asset {}", name);
                 self.assets.push(SyncAsset {
                     path: path.to_path_buf(),
-                    display_path,
+                    name,
                     config: current_config,
                     manifest_entry,
                 });
@@ -244,14 +241,14 @@ impl SyncSession {
             };
 
             if need_to_upload {
-                println!("Uploading {}", asset.display_path);
+                println!("Uploading {}", asset.name);
 
-                let name = asset.path.file_stem().unwrap().to_str().unwrap();
+                let uploaded_name = asset.path.file_stem().unwrap().to_str().unwrap();
 
                 let response = api_client
                     .upload_image(ImageUploadData {
                         image_data: asset_content,
-                        name,
+                        name: uploaded_name,
                         description: "Uploaded by Tarmac.",
                     })
                     .expect("Upload failed");
@@ -270,7 +267,7 @@ impl SyncSession {
 
     fn codegen(&self) -> Result<(), SyncError> {
         for asset in &self.assets {
-            log::trace!("Running codegen for {}", asset.display_path);
+            log::trace!("Running codegen for {}", asset.name);
 
             match asset.config.codegen {
                 CodegenKind::None => {}
@@ -283,7 +280,7 @@ impl SyncSession {
                     } else {
                         log::warn!(
                             "Skipping codegen for asset {} since it was not uploaded.",
-                            asset.display_path
+                            asset.name
                         );
                     }
                 }
@@ -312,7 +309,7 @@ impl SyncSession {
                     } else {
                         log::warn!(
                             "Skipping codegen for asset {} since it was not uploaded.",
-                            asset.display_path
+                            asset.name
                         );
                     }
                 }
@@ -326,7 +323,7 @@ impl SyncSession {
         let manifest = Manifest::from_assets(
             self.assets
                 .iter()
-                .map(|asset| (asset.display_path.clone(), asset.manifest_entry.clone())),
+                .map(|asset| (asset.name.clone(), asset.manifest_entry.clone())),
         );
 
         manifest
@@ -334,19 +331,6 @@ impl SyncSession {
             .context(error::Manifest)?;
 
         Ok(())
-    }
-}
-
-fn spruce_up_path(root_path: &Path, path: &Path) -> String {
-    let relative = path.strip_prefix(root_path).unwrap();
-    let displayed = format!("{}", relative.display());
-
-    // In order to make relative paths behave cross-platform, fix the path
-    // separator to always be / on platforms where it isn't the main separator.
-    if path::MAIN_SEPARATOR == '/' {
-        displayed
-    } else {
-        displayed.replace(path::MAIN_SEPARATOR, "/")
     }
 }
 

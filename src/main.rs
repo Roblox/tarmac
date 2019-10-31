@@ -1,3 +1,4 @@
+mod asset_name;
 mod auth_cookie;
 mod commands;
 mod config;

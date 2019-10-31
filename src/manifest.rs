@@ -7,11 +7,13 @@ use std::{
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
+use crate::asset_name::AssetName;
+
 static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Manifest {
-    pub assets: BTreeMap<String, ManifestAsset>,
+    pub assets: BTreeMap<AssetName, ManifestAsset>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -59,7 +61,7 @@ impl Manifest {
     /// be present in the manifest.
     pub fn from_assets<I>(assets: I) -> Self
     where
-        I: IntoIterator<Item = (String, ManifestAsset)>,
+        I: IntoIterator<Item = (AssetName, ManifestAsset)>,
     {
         Self {
             assets: assets.into_iter().collect(),
