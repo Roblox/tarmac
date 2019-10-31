@@ -62,7 +62,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
     };
 
     for path in paths {
-        session.feed(&current_dir, &path)?;
+        session.feed(&path)?;
     }
 
     session.create_spritesheets()?;
@@ -143,25 +143,20 @@ impl SyncSession {
     }
 
     /// Load a path into the sync session as a source of asset files.
-    fn feed(&mut self, root_path: &Path, path: &Path) -> Result<(), SyncError> {
+    fn feed(&mut self, path: &Path) -> Result<(), SyncError> {
         log::trace!("Feeding path to sync session: {}", path.display());
 
         let config = Self::find_config(path)?.unwrap_or_default();
-        self.feed_inner(root_path, path, config.default)
+        self.feed_inner(path, config.default)
     }
 
     /// Recursive implementation function for `feed`
-    fn feed_inner(
-        &mut self,
-        root_path: &Path,
-        path: &Path,
-        current_config: ConfigEntry,
-    ) -> Result<(), SyncError> {
+    fn feed_inner(&mut self, path: &Path, current_config: ConfigEntry) -> Result<(), SyncError> {
         let meta = fs::metadata(path).context(error::Io { path })?;
 
         if meta.is_file() {
             if is_image_asset(path) {
-                let display_path = spruce_up_path(root_path, path);
+                let display_path = spruce_up_path(&self.root_path, path);
 
                 let manifest_entry = self
                     .source_manifest
@@ -195,7 +190,7 @@ impl SyncSession {
             for child_entry in children {
                 let child_entry = child_entry.context(error::Io { path })?;
 
-                self.feed_inner(root_path, &child_entry.path(), child_config.clone())?;
+                self.feed_inner(&child_entry.path(), child_config.clone())?;
             }
         }
 
