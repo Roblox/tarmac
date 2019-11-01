@@ -5,6 +5,7 @@ mod config;
 mod manifest;
 mod options;
 mod roblox_web_api;
+mod types;
 
 use std::{error::Error, process};
 
