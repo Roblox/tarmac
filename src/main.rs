@@ -2,10 +2,10 @@ mod asset_name;
 mod auth_cookie;
 mod commands;
 mod config;
+mod data;
 mod manifest;
 mod options;
 mod roblox_web_api;
-mod types;
 
 use std::{error::Error, process};
 
