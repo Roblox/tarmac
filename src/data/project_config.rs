@@ -12,29 +12,41 @@ static PROJECT_CONFIG_FILENAME: &str = "tarmac-project.toml";
 /// Project-level configuration. Defined once, where Tarmac is run from, in a
 /// `tarmac-project.toml` file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProjectConfig {
     #[serde(default)]
     pub groups: HashMap<String, GroupConfig>,
+
+    #[serde(skip)]
+    pub file_path: PathBuf,
 }
 
 impl ProjectConfig {
-    pub fn read_from_folder<P: AsRef<Path>>(
-        folder_path: P,
-    ) -> Result<Option<Self>, ProjectConfigError> {
+    pub fn read_from_folder_or_file<P: AsRef<Path>>(path: P) -> Result<Self, ProjectConfigError> {
+        let path = path.as_ref();
+        let meta = fs::metadata(path).context(Io { path })?;
+
+        if meta.is_file() {
+            Self::read_from_file(path)
+        } else {
+            Self::read_from_folder(path)
+        }
+    }
+
+    fn read_from_file(path: &Path) -> Result<Self, ProjectConfigError> {
+        let contents = fs::read(path).context(Io { path })?;
+
+        let mut config: Self = toml::from_slice(&contents).context(Toml { path })?;
+        config.file_path = path.to_owned();
+
+        Ok(config)
+    }
+
+    fn read_from_folder<P: AsRef<Path>>(folder_path: P) -> Result<Self, ProjectConfigError> {
         let folder_path = folder_path.as_ref();
         let file_path = &folder_path.join(PROJECT_CONFIG_FILENAME);
 
-        let contents = match fs::read(file_path) {
-            Ok(contents) => contents,
-            Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
-                return Ok(None);
-            }
-            other => other.context(Io { file_path })?,
-        };
-
-        let config = toml::from_slice(&contents).context(Toml { file_path })?;
-
-        Ok(Some(config))
+        Self::read_from_file(file_path)
     }
 }
 
@@ -80,13 +92,12 @@ impl Default for GroupSpritesheetConfig {
 
 #[derive(Debug, Snafu)]
 pub enum ProjectConfigError {
+    #[snafu(display("{} in {}", source, path.display()))]
     Toml {
-        file_path: PathBuf,
+        path: PathBuf,
         source: toml::de::Error,
     },
 
-    Io {
-        file_path: PathBuf,
-        source: io::Error,
-    },
+    #[snafu(display("{} in {}", source, path.display()))]
+    Io { path: PathBuf, source: io::Error },
 }

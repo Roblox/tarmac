@@ -14,7 +14,7 @@ static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 
 /// Tracks the status of all groups, inputs, and outputs as of the last Tarmac
 /// sync.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Manifest {
     pub groups: HashMap<String, GroupManifest>,
     pub inputs: HashMap<AssetName, InputManifest>,

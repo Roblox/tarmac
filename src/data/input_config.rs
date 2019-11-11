@@ -1,4 +1,10 @@
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
+
 use serde::{Deserialize, Serialize};
+use snafu::{ResultExt, Snafu};
 
 static INPUT_CONFIG_FILENAME: &str = "tarmac.toml";
 
@@ -24,6 +30,17 @@ pub struct InputConfig {
     /// to be pre-packed into spritesheets, like images used in `Decal`
     /// instances.
     pub spritesheet_enabled: bool,
+}
+
+impl InputConfig {
+    pub fn read_from_folder<P: AsRef<Path>>(path: P) -> Result<Self, InputConfigError> {
+        let path = path.as_ref();
+
+        let contents = fs::read(path).context(Io { path })?;
+        let config = toml::from_slice(&contents).context(Toml { path })?;
+
+        Ok(config)
+    }
 }
 
 impl Default for InputConfig {
@@ -60,4 +77,26 @@ pub enum CodegenKind {
     /// * `ImageRectOffset` (Vector2)
     /// * `ImageRectSize` (Vector2)
     UrlAndSlice,
+}
+
+#[derive(Debug, Snafu)]
+pub enum InputConfigError {
+    Io {
+        path: PathBuf,
+        source: io::Error,
+    },
+
+    Toml {
+        path: PathBuf,
+        source: toml::de::Error,
+    },
+}
+
+impl InputConfigError {
+    pub fn is_not_found(&self) -> bool {
+        match self {
+            InputConfigError::Io { source, .. } => source.kind() == io::ErrorKind::NotFound,
+            _ => false,
+        }
+    }
 }
