@@ -22,21 +22,14 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    pub fn read_from_folder<P: AsRef<Path>>(folder_path: P) -> Result<Option<Self>, ManifestError> {
+    pub fn read_from_folder<P: AsRef<Path>>(folder_path: P) -> Result<Self, ManifestError> {
         let folder_path = folder_path.as_ref();
         let file_path = &folder_path.join(MANIFEST_FILENAME);
 
-        let contents = match fs::read(file_path) {
-            Ok(contents) => contents,
-            Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
-                return Ok(None);
-            }
-            other => other.context(Io { file_path })?,
-        };
-
+        let contents = fs::read(file_path).context(Io { file_path })?;
         let config = toml::from_slice(&contents).context(DeserializeToml { file_path })?;
 
-        Ok(Some(config))
+        Ok(config)
     }
 
     pub fn write_to_folder<P: AsRef<Path>>(&self, folder_path: P) -> Result<(), ManifestError> {
@@ -52,8 +45,16 @@ impl Manifest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupManifest {
+    /// The configuration defined in a tarmac-project.toml that created this
+    /// group.
     pub config: GroupConfig,
+
+    /// All of the paths that were part of this group last time any sync was
+    /// run.
     pub inputs: HashSet<AssetName>,
+
+    /// All of the assets that this group turned into the last time it was
+    /// uploaded.
     pub outputs: HashSet<u64>,
 }
 
@@ -61,11 +62,11 @@ pub struct GroupManifest {
 pub struct InputManifest {
     /// The hierarchical config applied to this config the last time it was part
     /// of an upload.
-    pub uploaded_config: InputConfig,
+    pub uploaded_config: Option<InputConfig>,
 
     /// The hexadecimal encoded hash of the contents of this input the last time
     /// it was part of an upload.
-    pub uploaded_hash: String,
+    pub uploaded_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,4 +91,13 @@ pub enum ManifestError {
         file_path: PathBuf,
         source: io::Error,
     },
+}
+
+impl ManifestError {
+    pub fn is_not_found(&self) -> bool {
+        match self {
+            ManifestError::Io { source, .. } => source.kind() == io::ErrorKind::NotFound,
+            _ => false,
+        }
+    }
 }
