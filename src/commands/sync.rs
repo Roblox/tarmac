@@ -55,10 +55,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
         None => env::current_dir().context(error::CurrentDir)?,
     };
 
-    let project = ProjectConfig::read_from_folder_or_file(&fuzzy_project_path)
-        .context(error::ProjectConfig)?;
-
-    let mut session = SyncSession::new(project)?;
+    let mut session = SyncSession::new(&fuzzy_project_path)?;
 
     match options.target {
         SyncTarget::Roblox => {
@@ -86,6 +83,8 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
 struct SyncSession {
     project: ProjectConfig,
 
+    original_manifest: Manifest,
+
     /// The path where this sync session was started from.
     /// $root_path/tarmac-manifest.toml will be updated when the sync session is
     /// over.
@@ -93,12 +92,25 @@ struct SyncSession {
 }
 
 impl SyncSession {
-    fn new(project: ProjectConfig) -> Result<Self, SyncError> {
+    fn new(fuzzy_project_path: &Path) -> Result<Self, SyncError> {
         log::trace!("Starting new sync session");
+
+        let project = ProjectConfig::read_from_folder_or_file(&fuzzy_project_path)
+            .context(error::ProjectConfig)?;
 
         let root_path = project.file_path.parent().unwrap().to_owned();
 
-        Ok(Self { project, root_path })
+        let original_manifest = match Manifest::read_from_folder(&root_path) {
+            Ok(manifest) => manifest,
+            Err(err) if err.is_not_found() => Manifest::default(),
+            other => other.context(error::Manifest)?,
+        };
+
+        Ok(Self {
+            project,
+            original_manifest,
+            root_path,
+        })
     }
 
     fn sync_to_roblox(&mut self, auth: String) -> Result<(), SyncError> {
