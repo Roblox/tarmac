@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeSet, HashMap, HashSet, VecDeque},
     env, fs,
     path::{Path, PathBuf},
 };
@@ -10,7 +10,7 @@ use snafu::ResultExt;
 use crate::{
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
-    data::{GroupConfig, InputConfig, Manifest, ProjectConfig},
+    data::{GroupConfig, GroupManifest, InputConfig, InputManifest, Manifest, ProjectConfig},
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::RobloxApiClient,
 };
@@ -205,15 +205,46 @@ impl SyncSession {
     }
 
     fn write_manifest(&self) -> Result<(), SyncError> {
-        // let manifest = Manifest::from_assets(
-        //     self.assets
-        //         .iter()
-        //         .map(|asset| (asset.name.clone(), asset.manifest_entry.clone())),
-        // );
+        let groups = self
+            .groups
+            .iter()
+            .map(|(name, group)| {
+                (
+                    name.clone(),
+                    GroupManifest {
+                        config: group.config.clone(),
+                        inputs: group.inputs.iter().cloned().collect(),
+                        outputs: BTreeSet::new(),
+                    },
+                )
+            })
+            .collect();
 
-        // manifest
-        //     .write_to_folder(&self.root_path)
-        //     .context(error::Manifest)?;
+        let inputs = self
+            .inputs
+            .iter()
+            .map(|(name, _input)| {
+                (
+                    name.clone(),
+                    InputManifest {
+                        uploaded_config: None,
+                        uploaded_hash: None,
+                    },
+                )
+            })
+            .collect();
+
+        let outputs = HashMap::new();
+
+        let manifest = Manifest {
+            groups,
+            inputs,
+            outputs,
+        };
+
+        manifest
+            .write_to_folder(&self.root_path)
+            .context(error::Manifest)?;
 
         Ok(())
     }

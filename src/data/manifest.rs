@@ -45,10 +45,6 @@ impl Manifest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupManifest {
-    /// The configuration defined in a tarmac-project.toml that created this
-    /// group.
-    pub config: GroupConfig,
-
     /// All of the paths that were part of this group last time any sync was
     /// run.
     pub inputs: BTreeSet<AssetName>,
@@ -56,17 +52,23 @@ pub struct GroupManifest {
     /// All of the assets that this group turned into the last time it was
     /// uploaded.
     pub outputs: BTreeSet<u64>,
+
+    /// The configuration defined in a tarmac-project.toml that created this
+    /// group.
+    #[serde(flatten)]
+    pub config: GroupConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct InputManifest {
-    /// The hierarchical config applied to this config the last time it was part
-    /// of an upload.
-    pub uploaded_config: Option<InputConfig>,
-
     /// The hexadecimal encoded hash of the contents of this input the last time
     /// it was part of an upload.
     pub uploaded_hash: Option<String>,
+
+    /// The hierarchical config applied to this config the last time it was part
+    /// of an upload.
+    pub uploaded_config: Option<InputConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

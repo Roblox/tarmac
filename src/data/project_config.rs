@@ -67,43 +67,30 @@ impl ProjectConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct GroupConfig {
     /// All of the paths that Tarmac should search to populate this group with
     /// inputs.
     pub paths: Vec<PathBuf>,
 
-    /// Defines the spritesheet strategy to use for packing assets dynamically
-    /// within this group.
-    ///
-    /// Not all assets can be packed into spritesheets, which is controlled by
-    /// configuration co-located with assets.
-    pub spritesheet: GroupSpritesheetConfig,
-    // TODO: input globs instead of paths?
-    // TODO: ignore globs?
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct GroupSpritesheetConfig {
     /// Whether to attempt to collect images into spritesheets.
-    pub enabled: bool,
+    #[serde(default = "default_spritesheet_enabled")]
+    pub spritesheet_enabled: bool,
 
     /// The maximum dimensions of generated spritesheets.
     ///
     /// If Tarmac runs out of room in a spritesheet, images will be put into
     /// multiple spritesheet images.
-    pub max_size: (usize, usize),
-    // TODO: packing algorithm?
-    // TODO: preferred image format?
+    #[serde(default = "default_max_size")]
+    pub max_spritesheet_size: (usize, usize),
 }
 
-impl Default for GroupSpritesheetConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            max_size: (1024, 1024),
-        }
-    }
+fn default_spritesheet_enabled() -> bool {
+    false
+}
+
+fn default_max_size() -> (usize, usize) {
+    (1024, 1024)
 }
 
 #[derive(Debug, Snafu)]

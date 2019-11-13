@@ -13,7 +13,7 @@ static INPUT_CONFIG_FILENAME: &str = "tarmac.toml";
 /// This will be set by package and asset authors and collected by a Tarmac
 /// project.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(default, rename_all = "kebab-case")]
 pub struct InputConfig {
     /// What kind of extra links Tarmac should generate when these assets are
     /// consumed in a project.
