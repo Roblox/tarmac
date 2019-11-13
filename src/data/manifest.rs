@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     fs, io,
     path::{Path, PathBuf},
 };
@@ -51,11 +51,11 @@ pub struct GroupManifest {
 
     /// All of the paths that were part of this group last time any sync was
     /// run.
-    pub inputs: HashSet<AssetName>,
+    pub inputs: BTreeSet<AssetName>,
 
     /// All of the assets that this group turned into the last time it was
     /// uploaded.
-    pub outputs: HashSet<u64>,
+    pub outputs: BTreeSet<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

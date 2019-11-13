@@ -1,21 +1,22 @@
 use std::{
+    collections::{HashMap, HashSet, VecDeque},
     env, fs,
     path::{Path, PathBuf},
 };
 
 use sha2::{Digest, Sha256};
-use snafu::{IntoError, ResultExt};
+use snafu::ResultExt;
 
 use crate::{
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
-    data::{CodegenKind, Manifest, ManifestError, ProjectConfig, ProjectConfigError},
+    data::{GroupConfig, InputConfig, Manifest, ProjectConfig},
     options::{GlobalOptions, SyncOptions, SyncTarget},
-    roblox_web_api::{ImageUploadData, RobloxApiClient},
+    roblox_web_api::RobloxApiClient,
 };
 
 mod error {
-    use crate::data::{ManifestError, ProjectConfigError};
+    use crate::data::{InputConfigError, ManifestError, ProjectConfigError};
     use snafu::Snafu;
     use std::{io, path::PathBuf};
 
@@ -25,6 +26,11 @@ mod error {
         #[snafu(display("{}", source))]
         ProjectConfig {
             source: ProjectConfigError,
+        },
+
+        #[snafu(display("{}", source))]
+        InputConfig {
+            source: InputConfigError,
         },
 
         #[snafu(display("{}", source))]
@@ -57,6 +63,8 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
 
     let mut session = SyncSession::new(&fuzzy_project_path)?;
 
+    session.gather_inputs()?;
+
     match options.target {
         SyncTarget::Roblox => {
             let auth = global
@@ -81,9 +89,18 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
 /// command.
 #[derive(Debug)]
 struct SyncSession {
+    /// The project file pulled from the starting point of the sync operation.
     project: ProjectConfig,
 
+    /// The manifest file that was present as of the beginning of the sync
+    /// operation.
     original_manifest: Manifest,
+
+    /// All of the groups and their information in the current sync.
+    groups: HashMap<String, SyncGroup>,
+
+    /// All of the inputs discovered so far in the current sync.
+    inputs: HashMap<AssetName, SyncInput>,
 
     /// The path where this sync session was started from.
     /// $root_path/tarmac-manifest.toml will be updated when the sync session is
@@ -98,6 +115,20 @@ impl SyncSession {
         let project = ProjectConfig::read_from_folder_or_file(&fuzzy_project_path)
             .context(error::ProjectConfig)?;
 
+        let groups = project
+            .groups
+            .iter()
+            .map(|(name, config)| {
+                (
+                    name.clone(),
+                    SyncGroup {
+                        config: config.clone(),
+                        inputs: HashSet::new(),
+                    },
+                )
+            })
+            .collect();
+
         let root_path = project.file_path.parent().unwrap().to_owned();
 
         let original_manifest = match Manifest::read_from_folder(&root_path) {
@@ -110,11 +141,61 @@ impl SyncSession {
             project,
             original_manifest,
             root_path,
+            groups,
+            inputs: HashMap::new(),
         })
     }
 
+    /// Traverse through all known groups and find relevant input files.
+    fn gather_inputs(&mut self) -> Result<(), SyncError> {
+        let mut paths_to_visit: VecDeque<(InputConfig, PathBuf)> = VecDeque::new();
+
+        for group in self.groups.values_mut() {
+            for input_path in &group.config.paths {
+                paths_to_visit.push_back((InputConfig::default(), input_path.clone()));
+
+                while let Some((input_config, input_path)) = paths_to_visit.pop_front() {
+                    let meta =
+                        fs::metadata(&input_path).context(error::Io { path: &input_path })?;
+
+                    if meta.is_file() {
+                        if is_image_asset(&input_path) {
+                            let asset_name = AssetName::from_paths(&self.root_path, &input_path);
+
+                            self.inputs.insert(
+                                asset_name.clone(),
+                                SyncInput {
+                                    path: input_path,
+                                    config: input_config,
+                                },
+                            );
+
+                            group.inputs.insert(asset_name);
+                        }
+                    } else {
+                        let child_input_config = match InputConfig::read_from_folder(&input_path) {
+                            Ok(config) => config,
+                            Err(err) if err.is_not_found() => input_config.clone(),
+                            other => other.context(error::InputConfig)?,
+                        };
+
+                        let children =
+                            fs::read_dir(&input_path).context(error::Io { path: &input_path })?;
+
+                        for entry in children {
+                            let entry = entry.context(error::Io { path: &input_path })?;
+                            paths_to_visit.push_back((child_input_config.clone(), entry.path()));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn sync_to_roblox(&mut self, auth: String) -> Result<(), SyncError> {
-        let mut api_client = RobloxApiClient::new(auth);
+        let mut _api_client = RobloxApiClient::new(auth);
 
         Ok(())
     }
@@ -136,6 +217,18 @@ impl SyncSession {
 
         Ok(())
     }
+}
+
+#[derive(Debug)]
+struct SyncInput {
+    path: PathBuf,
+    config: InputConfig,
+}
+
+#[derive(Debug)]
+struct SyncGroup {
+    config: GroupConfig,
+    inputs: HashSet<AssetName>,
 }
 
 fn is_image_asset(path: &Path) -> bool {

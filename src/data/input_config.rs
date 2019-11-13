@@ -33,11 +33,12 @@ pub struct InputConfig {
 }
 
 impl InputConfig {
-    pub fn read_from_folder<P: AsRef<Path>>(path: P) -> Result<Self, InputConfigError> {
-        let path = path.as_ref();
+    pub fn read_from_folder<P: AsRef<Path>>(folder_path: P) -> Result<Self, InputConfigError> {
+        let folder_path = folder_path.as_ref();
+        let file_path = &folder_path.join(INPUT_CONFIG_FILENAME);
 
-        let contents = fs::read(path).context(Io { path })?;
-        let config = toml::from_slice(&contents).context(Toml { path })?;
+        let contents = fs::read(file_path).context(Io { path: file_path })?;
+        let config = toml::from_slice(&contents).context(Toml { path: file_path })?;
 
         Ok(config)
     }

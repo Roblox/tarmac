@@ -39,6 +39,22 @@ impl ProjectConfig {
         let mut config: Self = toml::from_slice(&contents).context(Toml { path })?;
         config.file_path = path.to_owned();
 
+        let project_folder_path = path.parent().unwrap();
+
+        for group in config.groups.values_mut() {
+            group.paths = group
+                .paths
+                .drain(..)
+                .map(|path| {
+                    if path.is_absolute() {
+                        path
+                    } else {
+                        project_folder_path.join(path)
+                    }
+                })
+                .collect();
+        }
+
         Ok(config)
     }
 
@@ -54,7 +70,7 @@ impl ProjectConfig {
 pub struct GroupConfig {
     /// All of the paths that Tarmac should search to populate this group with
     /// inputs.
-    pub paths: Vec<String>,
+    pub paths: Vec<PathBuf>,
 
     /// Defines the spritesheet strategy to use for packing assets dynamically
     /// within this group.
