@@ -12,8 +12,8 @@ static INPUT_CONFIG_FILENAME: &str = "tarmac.toml";
 ///
 /// This will be set by package and asset authors and collected by a Tarmac
 /// project.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, rename_all = "kebab-case")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct InputConfig {
     /// What kind of extra links Tarmac should generate when these assets are
     /// consumed in a project.
@@ -53,7 +53,7 @@ impl Default for InputConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CodegenKind {
     /// Emit no Lua files linking images to their assets.

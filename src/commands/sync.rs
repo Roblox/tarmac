@@ -12,7 +12,7 @@ use crate::{
     auth_cookie::get_auth_cookie,
     data::{GroupConfig, GroupManifest, InputConfig, InputManifest, Manifest, ProjectConfig},
     options::{GlobalOptions, SyncOptions, SyncTarget},
-    roblox_web_api::RobloxApiClient,
+    roblox_web_api::{ImageUploadData, RobloxApiClient},
 };
 
 mod error {
@@ -195,7 +195,79 @@ impl SyncSession {
     }
 
     fn sync_to_roblox(&mut self, auth: String) -> Result<(), SyncError> {
-        let mut _api_client = RobloxApiClient::new(auth);
+        log::info!("Syncing to Roblox...");
+
+        let mut api_client = RobloxApiClient::new(auth);
+
+        for (group_name, group) in &mut self.groups {
+            let should_sync_group = {
+                // We should sync if any of these are true:
+                // - The group's config is different
+                // - The set of input assets is different
+                // - Any of the inputs' configs are different
+                // - Any of the inputs' hashes are different
+
+                // TODO: We always sync every group for now.
+                true
+            };
+
+            if should_sync_group {
+                log::info!("Syncing group {}", group_name);
+                log::debug!("Clustering group into clumps");
+
+                // Within groups, we should group together assets that are
+                // elgible to be packed together. Assets that can't be packed
+                // should be put into their own clump.
+                //
+                // Only images can be packed. Two image inputs in a group are
+                // eligible to be packed if:
+                // - They're both marked as eligible for packing
+                // - They both have the same DPI scale
+                //
+                // TODO: For now, we just put every input into its own clump.
+                let mut clumps: Vec<Vec<AssetName>> = Vec::new();
+
+                // TODO: Turn this into some smarter clustering algorithm.
+                for input_name in &group.inputs {
+                    clumps.push(vec![input_name.clone()]);
+                }
+
+                log::debug!("Categorized and clumped assets: {:#?}", clumps);
+
+                for clump in clumps {
+                    if let [only_member] = clump.as_slice() {
+                        let input = self.inputs.get_mut(&only_member).unwrap();
+
+                        let uploaded_name = input.path.file_stem().unwrap().to_str().unwrap();
+                        let image_data =
+                            fs::read(&input.path).context(error::Io { path: &input.path })?;
+                        let hash = generate_asset_hash(&image_data);
+
+                        log::info!("Uploading {}", &only_member);
+
+                        let response = api_client
+                            .upload_image(ImageUploadData {
+                                image_data,
+                                name: uploaded_name,
+                                description: "Uploaded by Tarmac.",
+                            })
+                            .expect("Upload failed");
+
+                        log::info!(
+                            "Uploaded {} to ID {}",
+                            &only_member,
+                            response.backing_asset_id
+                        );
+                    } else {
+                        unimplemented!("Collecting multiple assets in a clump into spritesheets");
+                    }
+                }
+            } else {
+                log::info!("Skipping group {}", group_name);
+            }
+        }
+
+        log::info!("Sync to Roblox done");
 
         Ok(())
     }
@@ -229,18 +301,14 @@ impl SyncSession {
                     InputManifest {
                         uploaded_config: None,
                         uploaded_hash: None,
+                        uploaded_id: None,
+                        uploaded_slice: None,
                     },
                 )
             })
             .collect();
 
-        let outputs = HashMap::new();
-
-        let manifest = Manifest {
-            groups,
-            inputs,
-            outputs,
-        };
+        let manifest = Manifest { groups, inputs };
 
         manifest
             .write_to_folder(&self.root_path)

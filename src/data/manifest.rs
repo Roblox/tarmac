@@ -18,7 +18,6 @@ static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 pub struct Manifest {
     pub groups: HashMap<String, GroupManifest>,
     pub inputs: HashMap<AssetName, InputManifest>,
-    pub outputs: HashMap<u64, OutputManifest>,
 }
 
 impl Manifest {
@@ -66,16 +65,22 @@ pub struct InputManifest {
     /// it was part of an upload.
     pub uploaded_hash: Option<String>,
 
+    /// The asset ID that contains this input the last time it was uploaded.
+    pub uploaded_id: Option<u64>,
+
+    /// If the asset is an image that was packed into a spritesheet, contains
+    /// the portion of the uploaded image that contains this input.
+    pub uploaded_slice: Option<ImageSlice>,
+
     /// The hierarchical config applied to this config the last time it was part
     /// of an upload.
     pub uploaded_config: Option<InputConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OutputManifest {
-    /// The asset ID on Roblox.com that this asset was uploaded to the last time
-    /// it was part of an upload.
-    pub uploaded_id: u64,
+pub struct ImageSlice {
+    pub min: (u32, u32),
+    pub max: (u32, u32),
 }
 
 #[derive(Debug, Snafu)]

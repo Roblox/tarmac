@@ -66,8 +66,8 @@ impl ProjectConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct GroupConfig {
     /// All of the paths that Tarmac should search to populate this group with
     /// inputs.
