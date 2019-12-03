@@ -273,7 +273,7 @@ impl SyncSession {
                 CodegenKind::None => {}
                 CodegenKind::AssetUrl => {
                     if let Some(id) = asset.manifest_entry.uploaded_id {
-                        let path = &asset.path.with_extension(".lua");
+                        let path = &asset.path.with_extension("lua");
                         let contents = format!("return \"rbxassetid://{}\"", id);
 
                         fs::write(path, contents).context(error::Io { path })?;
@@ -286,7 +286,7 @@ impl SyncSession {
                 }
                 CodegenKind::Slice => {
                     if let Some(id) = asset.manifest_entry.uploaded_id {
-                        let path = &asset.path.with_extension(".lua");
+                        let path = &asset.path.with_extension("lua");
 
                         let contents = match &asset.manifest_entry.uploaded_subslice {
                             Some(slice) => format!(
