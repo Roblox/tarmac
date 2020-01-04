@@ -1224,7 +1224,7 @@ dependencies = [
 
 [[package]]
 name = "tarmac"
-version = "0.1.0"
+version = "0.2.0-dev"
 dependencies = [
  "env_logger 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
