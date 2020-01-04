@@ -1,18 +1,12 @@
-use std::{
-    collections::{BTreeSet, HashMap, HashSet, VecDeque},
-    env, fs,
-    path::{Path, PathBuf},
-};
+use std::{env, path::Path};
 
 use sha2::{Digest, Sha256};
 use snafu::ResultExt;
 
 use crate::{
-    asset_name::AssetName,
     auth_cookie::get_auth_cookie,
     data::{Config, Manifest},
     options::{GlobalOptions, SyncOptions, SyncTarget},
-    roblox_web_api::{ImageUploadData, RobloxApiClient},
 };
 
 mod error {

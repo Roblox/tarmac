@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fs, io,
     path::{Path, PathBuf},
 };
