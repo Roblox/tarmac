@@ -7,8 +7,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
-use super::{GroupConfig, InputConfig};
 use crate::asset_name::AssetName;
+
+type GroupConfig = ();
+type InputConfig = ();
 
 static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 

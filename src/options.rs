@@ -59,9 +59,9 @@ pub struct SyncOptions {
     #[structopt(long)]
     pub target: SyncTarget,
 
-    /// The path to a Tarmac project, or a folder containing a Tarmac project,
-    /// to define how to turn files on disk into assets.
-    pub project_path: Option<PathBuf>,
+    /// The path to a Tarmac config, or a folder containing a Tarmac config, to
+    /// define how to turn files on disk into assets.
+    pub config_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy)]

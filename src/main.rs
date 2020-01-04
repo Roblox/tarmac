@@ -2,6 +2,7 @@ mod asset_name;
 mod auth_cookie;
 mod commands;
 mod data;
+mod glob;
 mod options;
 mod roblox_web_api;
 
