@@ -48,11 +48,6 @@ pub struct UploadImageOptions {
 
 #[derive(Debug, StructOpt)]
 pub struct SyncOptions {
-    /// Whether Tarmac should attempt to pack images into spritesheets when
-    /// possible.
-    #[structopt(long)]
-    pub spritesheets: bool,
-
     /// Where Tarmac should put resulting artifacts. This impacts code
     /// generation and what side effects Tarmac performs.
     ///
@@ -64,9 +59,9 @@ pub struct SyncOptions {
     #[structopt(long)]
     pub target: SyncTarget,
 
-    /// The path to the assets to be synced with Roblox.com. Defaults to the
-    /// current working directory if no paths are specified.
-    pub paths: Vec<PathBuf>,
+    /// The path to a Tarmac project, or a folder containing a Tarmac project,
+    /// to define how to turn files on disk into assets.
+    pub project_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy)]

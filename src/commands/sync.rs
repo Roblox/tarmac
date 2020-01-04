@@ -1,4 +1,5 @@
 use std::{
+    collections::{BTreeSet, HashMap, HashSet, VecDeque},
     env, fs,
     path::{Path, PathBuf},
 };
@@ -9,14 +10,13 @@ use snafu::ResultExt;
 use crate::{
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
-    config::{CodegenKind, Config, ConfigEntry},
-    manifest::{Manifest, ManifestAsset},
+    data::{GroupConfig, GroupManifest, InputConfig, InputManifest, Manifest, ProjectConfig},
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
 };
 
 mod error {
-    use crate::{config::ConfigError, manifest::ManifestError};
+    use crate::data::{InputConfigError, ManifestError, ProjectConfigError};
     use snafu::Snafu;
     use std::{io, path::PathBuf};
 
@@ -24,8 +24,13 @@ mod error {
     #[snafu(visibility = "pub(super)")]
     pub enum SyncError {
         #[snafu(display("{}", source))]
-        Config {
-            source: ConfigError,
+        ProjectConfig {
+            source: ProjectConfigError,
+        },
+
+        #[snafu(display("{}", source))]
+        InputConfig {
+            source: InputConfigError,
         },
 
         #[snafu(display("{}", source))]
@@ -51,22 +56,14 @@ mod error {
 pub use error::SyncError;
 
 pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError> {
-    let current_dir = env::current_dir().context(error::CurrentDir)?;
-    let mut session = SyncSession::new(&current_dir)?;
-
-    // If the user specified no paths, use the current working directory as the
-    // input path.
-    let paths = if options.paths.is_empty() {
-        vec![current_dir.clone()]
-    } else {
-        options.paths
+    let fuzzy_project_path = match options.project_path {
+        Some(v) => v,
+        None => env::current_dir().context(error::CurrentDir)?,
     };
 
-    for path in paths {
-        session.feed(&path)?;
-    }
+    let mut session = SyncSession::new(&fuzzy_project_path)?;
 
-    session.create_spritesheets()?;
+    session.gather_inputs()?;
 
     match options.target {
         SyncTarget::Roblox => {
@@ -83,7 +80,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
     log::trace!("Session: {:#?}", session);
 
     session.write_manifest()?;
-    session.codegen()?;
+    // session.codegen()?;
 
     Ok(())
 }
@@ -92,171 +89,185 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
 /// command.
 #[derive(Debug)]
 struct SyncSession {
+    /// The project file pulled from the starting point of the sync operation.
+    project: ProjectConfig,
+
+    /// The manifest file that was present as of the beginning of the sync
+    /// operation.
+    original_manifest: Manifest,
+
+    /// All of the groups and their information in the current sync.
+    groups: HashMap<String, SyncGroup>,
+
+    /// All of the inputs discovered so far in the current sync.
+    inputs: HashMap<AssetName, SyncInput>,
+
     /// The path where this sync session was started from.
     /// $root_path/tarmac-manifest.toml will be updated when the sync session is
     /// over.
     root_path: PathBuf,
-
-    /// The contents of the original manifest from the session's root path, or
-    /// the default value if it wasn't present.
-    source_manifest: Manifest,
-
-    /// All of the assets loaded into the sync session so far.
-    assets: Vec<SyncAsset>,
-}
-
-#[derive(Debug)]
-struct SyncAsset {
-    /// The absolute path to the asset on disk.
-    path: PathBuf,
-
-    /// A path-derived, unique name for this asset.
-    name: AssetName,
-
-    /// Hierarchical configuration picked up when discovering this asset.
-    ///
-    /// Configuration is defined in tarmac.toml files.
-    config: ConfigEntry,
-
-    /// The current manifest data for this asset. Will be loaded from the sync
-    /// session's source manifest if an entry exists, or set to the default and
-    /// updated as part of the sync process.
-    manifest_entry: ManifestAsset,
 }
 
 impl SyncSession {
-    fn new(root_path: &Path) -> Result<Self, SyncError> {
+    fn new(fuzzy_project_path: &Path) -> Result<Self, SyncError> {
         log::trace!("Starting new sync session");
 
-        let source_manifest = Manifest::read_from_folder(root_path)
-            .context(error::Manifest)?
-            .unwrap_or_default();
+        let project = ProjectConfig::read_from_folder_or_file(&fuzzy_project_path)
+            .context(error::ProjectConfig)?;
+
+        let groups = project
+            .groups
+            .iter()
+            .map(|(name, config)| {
+                (
+                    name.clone(),
+                    SyncGroup {
+                        config: config.clone(),
+                        inputs: HashSet::new(),
+                    },
+                )
+            })
+            .collect();
+
+        let root_path = project.file_path.parent().unwrap().to_owned();
+
+        let original_manifest = match Manifest::read_from_folder(&root_path) {
+            Ok(manifest) => manifest,
+            Err(err) if err.is_not_found() => Manifest::default(),
+            other => other.context(error::Manifest)?,
+        };
 
         Ok(Self {
-            root_path: root_path.to_path_buf(),
-            source_manifest,
-            assets: Vec::new(),
+            project,
+            original_manifest,
+            root_path,
+            groups,
+            inputs: HashMap::new(),
         })
     }
 
-    /// Load a path into the sync session as a source of asset files.
-    fn feed(&mut self, path: &Path) -> Result<(), SyncError> {
-        log::trace!("Feeding path to sync session: {}", path.display());
+    /// Traverse through all known groups and find relevant input files.
+    fn gather_inputs(&mut self) -> Result<(), SyncError> {
+        let mut paths_to_visit: VecDeque<(InputConfig, PathBuf)> = VecDeque::new();
 
-        let config = Self::find_config(path)?.unwrap_or_default();
-        self.feed_inner(path, config.default)
-    }
+        for group in self.groups.values_mut() {
+            for input_path in &group.config.paths {
+                paths_to_visit.push_back((InputConfig::default(), input_path.clone()));
 
-    /// Recursive implementation function for `feed`
-    fn feed_inner(&mut self, path: &Path, current_config: ConfigEntry) -> Result<(), SyncError> {
-        let meta = fs::metadata(path).context(error::Io { path })?;
+                while let Some((input_config, input_path)) = paths_to_visit.pop_front() {
+                    let meta =
+                        fs::metadata(&input_path).context(error::Io { path: &input_path })?;
 
-        if meta.is_file() {
-            if is_image_asset(path) {
-                let name = AssetName::from_paths(&self.root_path, path);
+                    if meta.is_file() {
+                        if is_image_asset(&input_path) {
+                            let asset_name = AssetName::from_paths(&self.root_path, &input_path);
 
-                let manifest_entry = self
-                    .source_manifest
-                    .assets
-                    .get(&name)
-                    .cloned()
-                    .unwrap_or_default();
+                            self.inputs.insert(
+                                asset_name.clone(),
+                                SyncInput {
+                                    path: input_path,
+                                    config: input_config,
+                                },
+                            );
 
-                log::trace!("Adding asset {}", name);
-                self.assets.push(SyncAsset {
-                    path: path.to_path_buf(),
-                    name,
-                    config: current_config,
-                    manifest_entry,
-                });
-            }
-        } else {
-            // If this is a folder, it's possible that it contains a config. We
-            // should read it and apply to all of its descendants until we find
-            // a new config file.
-            let child_config = Config::read_from_folder(path)
-                .context(error::Config)?
-                .map(|config| {
-                    log::trace!("Found config in {}", path.display());
+                            group.inputs.insert(asset_name);
+                        }
+                    } else {
+                        let child_input_config = match InputConfig::read_from_folder(&input_path) {
+                            Ok(config) => config,
+                            Err(err) if err.is_not_found() => input_config.clone(),
+                            other => other.context(error::InputConfig)?,
+                        };
 
-                    config.default
-                })
-                .unwrap_or(current_config);
+                        let children =
+                            fs::read_dir(&input_path).context(error::Io { path: &input_path })?;
 
-            let children = fs::read_dir(path).context(error::Io { path })?;
-            for child_entry in children {
-                let child_entry = child_entry.context(error::Io { path })?;
-
-                self.feed_inner(&child_entry.path(), child_config.clone())?;
+                        for entry in children {
+                            let entry = entry.context(error::Io { path: &input_path })?;
+                            paths_to_visit.push_back((child_input_config.clone(), entry.path()));
+                        }
+                    }
+                }
             }
         }
 
-        Ok(())
-    }
-
-    /// Attempt to locate a config in the given path or any of its ancestors.
-    fn find_config(path: &Path) -> Result<Option<Config>, SyncError> {
-        let meta = fs::metadata(path).context(error::Io { path })?;
-
-        if meta.is_dir() {
-            if let Some(config) = Config::read_from_folder(path).context(error::Config)? {
-                return Ok(Some(config));
-            }
-        }
-
-        if let Some(parent) = path.parent() {
-            Self::find_config(parent)
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn create_spritesheets(&mut self) -> Result<(), SyncError> {
-        // TODO: Gather up all assets that are marked as being able to be part
-        // of a spritesheet, then build spritesheets for each of them.
-        //
-        // This will probably require some design work for defining spritesheet
-        // groups so that relevant images can be grouped together.
         Ok(())
     }
 
     fn sync_to_roblox(&mut self, auth: String) -> Result<(), SyncError> {
+        log::info!("Syncing to Roblox...");
+
         let mut api_client = RobloxApiClient::new(auth);
 
-        for asset in &mut self.assets {
-            let asset_content = fs::read(&asset.path).context(error::Io { path: &asset.path })?;
-            let asset_hash = generate_asset_hash(&asset_content);
+        for (group_name, group) in &mut self.groups {
+            let should_sync_group = {
+                // We should sync if any of these are true:
+                // - The group's config is different
+                // - The set of input assets is different
+                // - Any of the inputs' configs are different
+                // - Any of the inputs' hashes are different
 
-            let need_to_upload = if asset.manifest_entry.uploaded_id.is_some() {
-                // If this asset has been uploaded before, compare the content
-                // hash to see if it's changed since the most recent upload.
-                match &asset.manifest_entry.uploaded_hash {
-                    Some(existing_hash) => existing_hash != &asset_hash,
-                    None => true,
-                }
-            } else {
-                // If we haven't uploaded this asset before, we definitely need
-                // to upload it.
+                // TODO: We always sync every group for now.
                 true
             };
 
-            if need_to_upload {
-                println!("Uploading {}", asset.name);
+            if should_sync_group {
+                log::info!("Syncing group {}", group_name);
+                log::debug!("Clustering group into clumps");
 
-                let uploaded_name = asset.path.file_stem().unwrap().to_str().unwrap();
+                // Within groups, we should group together assets that are
+                // elgible to be packed together. Assets that can't be packed
+                // should be put into their own clump.
+                //
+                // Only images can be packed. Two image inputs in a group are
+                // eligible to be packed if:
+                // - They're both marked as eligible for packing
+                // - They both have the same DPI scale
+                //
+                // TODO: For now, we just put every input into its own clump.
+                let mut clumps: Vec<Vec<AssetName>> = Vec::new();
 
-                let response = api_client
-                    .upload_image(ImageUploadData {
-                        image_data: asset_content,
-                        name: uploaded_name,
-                        description: "Uploaded by Tarmac.",
-                    })
-                    .expect("Upload failed");
+                // TODO: Turn this into some smarter clustering algorithm.
+                for input_name in &group.inputs {
+                    clumps.push(vec![input_name.clone()]);
+                }
 
-                asset.manifest_entry.uploaded_id = Some(response.backing_asset_id);
-                asset.manifest_entry.uploaded_hash = Some(asset_hash);
+                log::debug!("Categorized and clumped assets: {:#?}", clumps);
+
+                for clump in clumps {
+                    if let [only_member] = clump.as_slice() {
+                        let input = self.inputs.get_mut(&only_member).unwrap();
+
+                        let uploaded_name = input.path.file_stem().unwrap().to_str().unwrap();
+                        let image_data =
+                            fs::read(&input.path).context(error::Io { path: &input.path })?;
+                        let hash = generate_asset_hash(&image_data);
+
+                        log::info!("Uploading {}", &only_member);
+
+                        let response = api_client
+                            .upload_image(ImageUploadData {
+                                image_data,
+                                name: uploaded_name,
+                                description: "Uploaded by Tarmac.",
+                            })
+                            .expect("Upload failed");
+
+                        log::info!(
+                            "Uploaded {} to ID {}",
+                            &only_member,
+                            response.backing_asset_id
+                        );
+                    } else {
+                        unimplemented!("Collecting multiple assets in a clump into spritesheets");
+                    }
+                }
+            } else {
+                log::info!("Skipping group {}", group_name);
             }
         }
+
+        log::info!("Sync to Roblox done");
 
         Ok(())
     }
@@ -265,66 +276,39 @@ impl SyncSession {
         unimplemented!("TODO: Implement syncing to the content folder");
     }
 
-    fn codegen(&self) -> Result<(), SyncError> {
-        for asset in &self.assets {
-            log::trace!("Running codegen for {}", asset.name);
-
-            match asset.config.codegen {
-                CodegenKind::None => {}
-                CodegenKind::AssetUrl => {
-                    if let Some(id) = asset.manifest_entry.uploaded_id {
-                        let path = &asset.path.with_extension("lua");
-                        let contents = format!("return \"rbxassetid://{}\"", id);
-
-                        fs::write(path, contents).context(error::Io { path })?;
-                    } else {
-                        log::warn!(
-                            "Skipping codegen for asset {} since it was not uploaded.",
-                            asset.name
-                        );
-                    }
-                }
-                CodegenKind::Slice => {
-                    if let Some(id) = asset.manifest_entry.uploaded_id {
-                        let path = &asset.path.with_extension("lua");
-
-                        let contents = match &asset.manifest_entry.uploaded_subslice {
-                            Some(slice) => format!(
-                                "return {{\
-                                 \n\tImage = \"rbxassetid://{}\",\
-                                 \n\tImageRectOffset = Vector2.new({}, {}),\
-                                 \n\tImageRectSize = Vector2.new({}, {}),\
-                                 }}",
-                                id, slice.offset.0, slice.offset.1, slice.size.0, slice.size.1,
-                            ),
-                            None => format!(
-                                "return {{\
-                                 \n\tImage = \"rbxassetid://{}\",\
-                                 }}",
-                                id
-                            ),
-                        };
-
-                        fs::write(path, contents).context(error::Io { path })?;
-                    } else {
-                        log::warn!(
-                            "Skipping codegen for asset {} since it was not uploaded.",
-                            asset.name
-                        );
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     fn write_manifest(&self) -> Result<(), SyncError> {
-        let manifest = Manifest::from_assets(
-            self.assets
-                .iter()
-                .map(|asset| (asset.name.clone(), asset.manifest_entry.clone())),
-        );
+        let groups = self
+            .groups
+            .iter()
+            .map(|(name, group)| {
+                (
+                    name.clone(),
+                    GroupManifest {
+                        config: group.config.clone(),
+                        inputs: group.inputs.iter().cloned().collect(),
+                        outputs: BTreeSet::new(),
+                    },
+                )
+            })
+            .collect();
+
+        let inputs = self
+            .inputs
+            .iter()
+            .map(|(name, _input)| {
+                (
+                    name.clone(),
+                    InputManifest {
+                        uploaded_config: None,
+                        uploaded_hash: None,
+                        uploaded_id: None,
+                        uploaded_slice: None,
+                    },
+                )
+            })
+            .collect();
+
+        let manifest = Manifest { groups, inputs };
 
         manifest
             .write_to_folder(&self.root_path)
@@ -332,6 +316,18 @@ impl SyncSession {
 
         Ok(())
     }
+}
+
+#[derive(Debug)]
+struct SyncInput {
+    path: PathBuf,
+    config: InputConfig,
+}
+
+#[derive(Debug)]
+struct SyncGroup {
+    config: GroupConfig,
+    inputs: HashSet<AssetName>,
 }
 
 fn is_image_asset(path: &Path) -> bool {

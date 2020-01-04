@@ -1,8 +1,7 @@
 mod asset_name;
 mod auth_cookie;
 mod commands;
-mod config;
-mod manifest;
+mod data;
 mod options;
 mod roblox_web_api;
 
