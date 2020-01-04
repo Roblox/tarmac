@@ -93,6 +93,8 @@ impl SyncSession {
         let root_config =
             Config::read_from_folder_or_file(&fuzzy_config_path).context(error::Config)?;
 
+        log::trace!("Starting from config \"{}\"", root_config.name);
+
         let original_manifest = match Manifest::read_from_folder(root_config.folder()) {
             Ok(manifest) => manifest,
             Err(err) if err.is_not_found() => Manifest::default(),

@@ -15,13 +15,15 @@ static CONFIG_FILENAME: &str = "tarmac.toml";
 /// Tarmac is started from a top-level tarmac.toml file. Config files can
 /// include other config files.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Config {
-    /// Defines project-level fields.
-    ///
-    /// This field is only expected to be set and is only relevant in the
-    /// top-level config that Tarmac runs from.
-    pub project: Option<ProjectConfig>,
+    /// The name of the project, currently only used in debugging.
+    pub name: String,
+
+    /// The maximum size that any packed spritesheets should be. Only applies if
+    /// this config is the root config file.
+    #[serde(default = "default_max_spritesheet_size")]
+    pub max_spritesheet_size: (usize, usize),
 
     /// A list of other Tarmac config files that should be owned by this one.
     #[serde(default)]
@@ -70,14 +72,8 @@ impl Config {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct ProjectConfig {
-    /// A human-readable name for this project.
-    pub name: String,
-
-    /// The maximum size that any packed spritesheets should be.
-    pub max_spritesheet_size: (usize, usize),
+fn default_max_spritesheet_size() -> (usize, usize) {
+    (1024, 1024)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
