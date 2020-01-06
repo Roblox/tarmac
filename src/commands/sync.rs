@@ -13,13 +13,14 @@ use crate::{
     auth_cookie::get_auth_cookie,
     data::{Config, InputConfig, Manifest},
     options::{GlobalOptions, SyncOptions, SyncTarget},
-    roblox_web_api::{ImageUploadData, RobloxApiClient},
+    roblox_web_api::RobloxApiClient,
 };
 
 mod error {
     use crate::data::{ConfigError, ManifestError};
     use snafu::Snafu;
     use std::{io, path::PathBuf};
+    use walkdir;
 
     #[derive(Debug, Snafu)]
     #[snafu(visibility = "pub(super)")]
@@ -47,7 +48,14 @@ mod error {
         #[snafu(display("'tarmac sync' requires an authentication cookie"))]
         NoAuth,
 
-        #[snafu(display("Path {} is described by more than one glob", path.display()))]
+        // TODO: Add more detail here and better display
+        #[snafu(display("{}", source))]
+        WalkDir {
+            source: walkdir::Error,
+        },
+
+        // TODO: Add more detail here and better display
+        #[snafu(display("Path {} was described by more than one glob", path.display()))]
         OverlappingGlobs {
             path: PathBuf,
         },
@@ -202,21 +210,20 @@ impl SyncSession {
     fn discover_inputs(&mut self) -> Result<(), SyncError> {
         let inputs = &mut self.inputs;
 
-        for config in self
-            .non_root_configs
-            .iter()
-            .chain(iter::once(&self.root_config))
-        {
+        // Starting with our root config, iterate over all configs and find all
+        // relevant inputs
+        for config in iter::once(&self.root_config).chain(self.non_root_configs.iter()) {
             let config_path = config.file_path.as_path();
 
             for input_config in &config.inputs {
-                // TODO: Narrow down to any non-pattern prefix for glob
+                // TODO: Narrow down directory searching; we should be able to
+                // drill down to any non-pattern prefix that this glob specifies
                 let filtered_paths = WalkDir::new(config_path)
                     .into_iter()
                     .filter_entry(|entry| input_config.glob.is_match(entry.path()));
 
                 for matching_entry in filtered_paths {
-                    let matching = matching_entry.expect("Walkdir error");
+                    let matching = matching_entry.context(error::WalkDir)?;
                     let name = AssetName::from_paths(config_path, matching.path());
                     if inputs.get(&name).is_some() {
                         return Err(SyncError::OverlappingGlobs {
