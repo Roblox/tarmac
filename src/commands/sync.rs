@@ -131,6 +131,7 @@ impl SyncSession {
                 // check that it's a Tarmac config and include it.
 
                 let config = Config::read_from_file(&search_path).context(error::Config)?;
+                to_search.extend(config.includes.iter().map(|include| include.path.clone()));
                 self.non_root_configs.push(config);
             } else {
                 // If this directory contains a config file, we can stop
@@ -138,7 +139,11 @@ impl SyncSession {
 
                 match Config::read_from_folder(&search_path) {
                     // We found a config, we're done here
-                    Ok(config) => self.non_root_configs.push(config),
+                    Ok(config) => {
+                        to_search
+                            .extend(config.includes.iter().map(|include| include.path.clone()));
+                        self.non_root_configs.push(config);
+                    }
 
                     // We didn't find a config, keep searching
                     Err(err) if err.is_not_found() => {
