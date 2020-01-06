@@ -51,11 +51,15 @@ impl Config {
         }
     }
 
-    pub fn folder(&self) -> &Path {
-        self.file_path.parent().unwrap()
+    pub fn read_from_folder<P: AsRef<Path>>(folder_path: P) -> Result<Self, ConfigError> {
+        let folder_path = folder_path.as_ref();
+        let file_path = &folder_path.join(CONFIG_FILENAME);
+
+        Self::read_from_file(file_path)
     }
 
-    fn read_from_file(path: &Path) -> Result<Self, ConfigError> {
+    pub fn read_from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
+        let path = path.as_ref();
         let contents = fs::read(path).context(Io { path })?;
 
         let mut config: Self = toml::from_slice(&contents).context(Toml { path })?;
@@ -64,11 +68,9 @@ impl Config {
         Ok(config)
     }
 
-    fn read_from_folder<P: AsRef<Path>>(folder_path: P) -> Result<Self, ConfigError> {
-        let folder_path = folder_path.as_ref();
-        let file_path = &folder_path.join(CONFIG_FILENAME);
-
-        Self::read_from_file(file_path)
+    /// The path that paths in this Config should be considered relative to.
+    pub fn folder(&self) -> &Path {
+        self.file_path.parent().unwrap()
     }
 }
 
@@ -152,4 +154,18 @@ pub enum ConfigError {
 
     #[snafu(display("{} in {}", source, path.display()))]
     Io { path: PathBuf, source: io::Error },
+}
+
+impl ConfigError {
+    /// Tells whether this ConfigError originated because of a path not
+    /// existing.
+    ///
+    /// This is intended for use with methods like `Config::read_from_folder` in
+    /// order to avoid needing to check if a file with the right name exists.
+    pub fn is_not_found(&self) -> bool {
+        match self {
+            ConfigError::Io { source, .. } => source.kind() == io::ErrorKind::NotFound,
+            _ => false,
+        }
+    }
 }
