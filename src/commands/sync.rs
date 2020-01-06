@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
-    env, fs,
+    env, fs, iter,
     path::{Path, PathBuf},
 };
 
@@ -46,6 +46,11 @@ mod error {
 
         #[snafu(display("'tarmac sync' requires an authentication cookie"))]
         NoAuth,
+
+        #[snafu(display("Path {} is described by more than one glob", path.display()))]
+        OverlappingGlobs {
+            path: PathBuf,
+        },
     }
 }
 
@@ -195,107 +200,46 @@ impl SyncSession {
     }
 
     fn discover_inputs(&mut self) -> Result<(), SyncError> {
-        let root_path = &self.root_config.file_path;
         let inputs = &mut self.inputs;
 
-        for input_config in &self.root_config.inputs {
-            // TODO: Narrow down to any non-pattern prefix for glob
-            let filtered_paths = WalkDir::new(root_path)
-                .into_iter()
-                .filter_entry(|entry| input_config.glob.is_match(entry.path()));
+        for config in self
+            .non_root_configs
+            .iter()
+            .chain(iter::once(&self.root_config))
+        {
+            let config_path = config.file_path.as_path();
 
-            for matching_entry in filtered_paths {
-                let matching = matching_entry.expect("Walkdir error");
-                let name = AssetName::from_paths(root_path, matching.path());
-                // match inputs.entry(name) {}
-                inputs.insert(
-                    name,
-                    SyncInput {
-                        path: matching.into_path(),
-                        config: input_config.clone(),
-                    },
-                );
+            for input_config in &config.inputs {
+                // TODO: Narrow down to any non-pattern prefix for glob
+                let filtered_paths = WalkDir::new(config_path)
+                    .into_iter()
+                    .filter_entry(|entry| input_config.glob.is_match(entry.path()));
+
+                for matching_entry in filtered_paths {
+                    let matching = matching_entry.expect("Walkdir error");
+                    let name = AssetName::from_paths(config_path, matching.path());
+                    if inputs.get(&name).is_some() {
+                        return Err(SyncError::OverlappingGlobs {
+                            path: matching.into_path(),
+                        });
+                    }
+
+                    inputs.insert(
+                        name,
+                        SyncInput {
+                            path: matching.into_path(),
+                            config: input_config.clone(),
+                        },
+                    );
+                }
             }
         }
+
         Ok(())
     }
 
-    fn sync_to_roblox(&mut self, auth: String) -> Result<Manifest, SyncError> {
-        // log::info!("Syncing to Roblox...");
-
-        // let mut api_client = RobloxApiClient::new(auth);
-
-        // for (group_name, group) in &mut self.groups {
-        //     let should_sync_group = {
-        //         // We should sync if any of these are true:
-        //         // - The group's config is different
-        //         // - The set of input assets is different
-        //         // - Any of the inputs' configs are different
-        //         // - Any of the inputs' hashes are different
-
-        //         // TODO: We always sync every group for now.
-        //         true
-        //     };
-
-        //     if should_sync_group {
-        //         log::info!("Syncing group {}", group_name);
-        //         log::debug!("Clustering group into clumps");
-
-        //         // Within groups, we should group together assets that are
-        //         // eligible to be packed together. Assets that can't be packed
-        //         // should be put into their own clump.
-        //         //
-        //         // Only images can be packed. Two image inputs in a group are
-        //         // eligible to be packed if:
-        //         // - They're both marked as eligible for packing
-        //         // - They both have the same DPI scale
-        //         //
-        //         // TODO: For now, we just put every input into its own clump.
-        //         let mut clumps: Vec<Vec<AssetName>> = Vec::new();
-
-        //         // TODO: Turn this into some smarter clustering algorithm.
-        //         for input_name in &group.inputs {
-        //             clumps.push(vec![input_name.clone()]);
-        //         }
-
-        //         log::debug!("Categorized and clumped assets: {:#?}", clumps);
-
-        //         for clump in clumps {
-        //             if let [only_member] = clump.as_slice() {
-        //                 let input = self.inputs.get_mut(&only_member).unwrap();
-
-        //                 let uploaded_name = input.path.file_stem().unwrap().to_str().unwrap();
-        //                 let image_data =
-        //                     fs::read(&input.path).context(error::Io { path: &input.path })?;
-        //                 let hash = generate_asset_hash(&image_data);
-
-        //                 log::info!("Uploading {}", &only_member);
-
-        //                 let response = api_client
-        //                     .upload_image(ImageUploadData {
-        //                         image_data,
-        //                         name: uploaded_name,
-        //                         description: "Uploaded by Tarmac.",
-        //                     })
-        //                     .expect("Upload failed");
-
-        //                 log::info!(
-        //                     "Uploaded {} to ID {}",
-        //                     &only_member,
-        //                     response.backing_asset_id
-        //                 );
-        //             } else {
-        //                 unimplemented!("Collecting multiple assets in a clump into spritesheets");
-        //             }
-        //         }
-        //     } else {
-        //         log::info!("Skipping group {}", group_name);
-        //     }
-        // }
-
-        // log::info!("Sync to Roblox done");
-
-        Err(SyncError::NoAuth)
+    fn sync_to_roblox(&mut self, auth: String) -> Result<(), SyncError> {
+        Ok(())
     }
 }
 
