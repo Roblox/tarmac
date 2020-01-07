@@ -1,18 +1,26 @@
-use std::{collections::VecDeque, env, fs, path::Path};
+use std::{
+    collections::{HashMap, VecDeque},
+    env, fs, iter,
+    path::{Path, PathBuf},
+};
 
 use sha2::{Digest, Sha256};
 use snafu::ResultExt;
+use walkdir::WalkDir;
 
 use crate::{
+    asset_name::AssetName,
     auth_cookie::get_auth_cookie,
-    data::{Config, Manifest},
+    data::{Config, InputConfig, Manifest},
     options::{GlobalOptions, SyncOptions, SyncTarget},
+    roblox_web_api::RobloxApiClient,
 };
 
 mod error {
     use crate::data::{ConfigError, ManifestError};
     use snafu::Snafu;
     use std::{io, path::PathBuf};
+    use walkdir;
 
     #[derive(Debug, Snafu)]
     #[snafu(visibility = "pub(super)")]
@@ -39,6 +47,18 @@ mod error {
 
         #[snafu(display("'tarmac sync' requires an authentication cookie"))]
         NoAuth,
+
+        // TODO: Add more detail here and better display
+        #[snafu(display("{}", source))]
+        WalkDir {
+            source: walkdir::Error,
+        },
+
+        // TODO: Add more detail here and better display
+        #[snafu(display("Path {} was described by more than one glob", path.display()))]
+        OverlappingGlobs {
+            path: PathBuf,
+        },
     }
 }
 
@@ -89,6 +109,15 @@ struct SyncSession {
     /// The manifest file that was present as of the beginning of the sync
     /// operation.
     original_manifest: Manifest,
+
+    /// All of the inputs discovered so far in the current sync.
+    inputs: HashMap<AssetName, SyncInput>,
+}
+
+#[derive(Debug)]
+struct SyncInput {
+    path: PathBuf,
+    config: InputConfig,
 }
 
 impl SyncSession {
@@ -110,6 +139,7 @@ impl SyncSession {
             root_config,
             non_root_configs: Vec::new(),
             original_manifest,
+            inputs: Default::default(),
         })
     }
 
@@ -178,6 +208,44 @@ impl SyncSession {
     }
 
     fn discover_inputs(&mut self) -> Result<(), SyncError> {
+        let inputs = &mut self.inputs;
+
+        // Starting with our root config, iterate over all configs and find all
+        // relevant inputs
+        for config in iter::once(&self.root_config).chain(self.non_root_configs.iter()) {
+            let config_path = config.file_path.as_path();
+
+            for input_config in &config.inputs {
+                // TODO: Narrow down directory searching; we should be able to
+                // drill down to any non-pattern prefix that this glob specifies
+                let filtered_paths = WalkDir::new(config_path)
+                    .into_iter()
+                    .filter_entry(|entry| input_config.glob.is_match(entry.path()));
+
+                for matching_entry in filtered_paths {
+                    let matching = matching_entry.context(error::WalkDir)?;
+                    let name = AssetName::from_paths(config_path, matching.path());
+                    if inputs.get(&name).is_some() {
+                        return Err(SyncError::OverlappingGlobs {
+                            path: matching.into_path(),
+                        });
+                    }
+
+                    inputs.insert(
+                        name,
+                        SyncInput {
+                            path: matching.into_path(),
+                            config: input_config.clone(),
+                        },
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn sync_to_roblox(&mut self, auth: String) -> Result<(), SyncError> {
         Ok(())
     }
 }
