@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{HashMap, VecDeque},
     env, fs, iter,
     path::{Path, PathBuf},
@@ -260,12 +261,100 @@ impl SyncSession {
     fn sync_to_roblox(&mut self) -> Result<(), SyncError> {
         let _client = self.api_client.as_mut().ok_or(SyncError::NoAuth)?;
 
-        // TODO: Group together inputs and upload them to Roblox.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        struct InputCompatibility {
+            packable: bool,
+        }
+
+        let mut compatible_input_groups = HashMap::new();
+
+        for (input_name, input) in &self.inputs {
+            let compatibility = InputCompatibility {
+                packable: input.config.packable,
+            };
+
+            let input_group = compatible_input_groups
+                .entry(compatibility)
+                .or_insert_with(Vec::new);
+
+            input_group.push(input_name.clone());
+        }
+
+        for (compatibility, group) in compatible_input_groups {
+            if compatibility.packable {
+                log::warn!("TODO: Support packing images");
+            } else {
+                for input_name in group {
+                    let input = self.inputs.get(&input_name).unwrap();
+
+                    if is_image_asset(&input.path) {
+                        self.sync_unpackable_image(&input_name)?;
+                    } else {
+                        log::warn!("Didn't know what to do with asset {}", input.path.display());
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
 
     fn sync_to_content_folder(&mut self) -> Result<(), SyncError> {
+        Ok(())
+    }
+
+    fn sync_unpackable_image(&mut self, input_name: &AssetName) -> Result<(), SyncError> {
+        let input = self.inputs.get(input_name).unwrap();
+        let mut contents = LazyFileContents::new(&input.path);
+
+        match self.original_manifest.inputs.get(&input_name) {
+            Some(input_manifest) => {
+                match &input_manifest.hash {
+                    Some(prev_hash) => {
+                        let hash = contents.hash()?;
+
+                        if hash != prev_hash {
+                            // upload this!
+                            return self.upload_unpacked_image();
+                        }
+                    }
+                    None => {
+                        // upload this!
+                        return self.upload_unpacked_image();
+                    }
+                }
+
+                if input_manifest.id.is_none() {
+                    // upload this.
+                    return self.upload_unpacked_image();
+                }
+
+                let prev_config = self.original_manifest.configs.get(&input_manifest.config);
+
+                match prev_config {
+                    Some(prev_config) => {
+                        if prev_config != &input.config {
+                            // upload!
+                        }
+                    }
+                    None => {
+                        // malformed manifest, let's upload.
+                        return self.upload_unpacked_image();
+                    }
+                }
+            }
+            None => {
+                // upload this.
+                return self.upload_unpacked_image();
+            }
+        }
+
+        Ok(())
+    }
+
+    fn upload_unpacked_image(&mut self) -> Result<(), SyncError> {
+        // TODO
+
         Ok(())
     }
 
@@ -281,6 +370,45 @@ impl SyncSession {
         // where the asset ended up.
 
         Ok(())
+    }
+}
+
+/// Represents a file for which we may or may not have read its contents or
+/// calculated their hash.
+struct LazyFileContents<'a> {
+    path: Cow<'a, Path>,
+    contents: Option<Vec<u8>>,
+    hash: Option<String>,
+}
+
+impl<'a> LazyFileContents<'a> {
+    fn new(path: impl Into<Cow<'a, Path>>) -> Self {
+        Self {
+            path: path.into(),
+            contents: None,
+            hash: None,
+        }
+    }
+
+    fn get(&mut self) -> Result<&[u8], SyncError> {
+        if self.contents.is_some() {
+            Ok(self.contents.as_ref().unwrap())
+        } else {
+            let contents = fs::read(&self.path).context(error::Io { path: &*self.path })?;
+
+            self.contents = Some(contents);
+            Ok(self.contents.as_ref().unwrap())
+        }
+    }
+
+    fn hash(&mut self) -> Result<&str, SyncError> {
+        if self.hash.is_some() {
+            Ok(self.hash.as_ref().unwrap())
+        } else {
+            let contents = self.get()?;
+            self.hash = Some(generate_asset_hash(contents));
+            Ok(self.hash.as_ref().unwrap())
+        }
     }
 }
 

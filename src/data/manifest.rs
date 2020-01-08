@@ -55,9 +55,9 @@ pub struct InputManifest {
     /// the portion of the uploaded image that contains this input.
     pub slice: Option<ImageSlice>,
 
-    /// The hierarchical config applied to this config the last time it was part
-    /// of an upload.
-    pub config: Option<AssetName>,
+    /// The config applied to this config the last time it was part of an
+    /// upload.
+    pub config: AssetName,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
