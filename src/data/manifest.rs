@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
 };
@@ -7,19 +7,16 @@ use std::{
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
-use crate::asset_name::AssetName;
-
-type GroupConfig = ();
-type InputConfig = ();
+use crate::{asset_name::AssetName, data::config::InputConfig};
 
 static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 
-/// Tracks the status of all groups, inputs, and outputs as of the last Tarmac
-/// sync.
+/// Tracks the status of all configuration, inputs, and outputs as of the last
+/// sync operation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Manifest {
-    pub groups: HashMap<String, GroupManifest>,
-    pub inputs: HashMap<AssetName, InputManifest>,
+    pub configs: BTreeMap<AssetName, InputConfig>,
+    pub inputs: BTreeMap<AssetName, InputManifest>,
 }
 
 impl Manifest {
@@ -45,38 +42,22 @@ impl Manifest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GroupManifest {
-    /// All of the paths that were part of this group last time any sync was
-    /// run.
-    pub inputs: BTreeSet<AssetName>,
-
-    /// All of the assets that this group turned into the last time it was
-    /// uploaded.
-    pub outputs: BTreeSet<u64>,
-
-    /// The configuration defined in a tarmac-project.toml that created this
-    /// group.
-    #[serde(flatten)]
-    pub config: GroupConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct InputManifest {
     /// The hexadecimal encoded hash of the contents of this input the last time
     /// it was part of an upload.
-    pub uploaded_hash: Option<String>,
+    pub hash: Option<String>,
 
     /// The asset ID that contains this input the last time it was uploaded.
-    pub uploaded_id: Option<u64>,
+    pub id: Option<u64>,
 
     /// If the asset is an image that was packed into a spritesheet, contains
     /// the portion of the uploaded image that contains this input.
-    pub uploaded_slice: Option<ImageSlice>,
+    pub slice: Option<ImageSlice>,
 
     /// The hierarchical config applied to this config the last time it was part
     /// of an upload.
-    pub uploaded_config: Option<InputConfig>,
+    pub config: Option<AssetName>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
