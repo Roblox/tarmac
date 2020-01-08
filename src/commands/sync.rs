@@ -89,8 +89,8 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
         }
     }
 
-    // session.write_manifest()?;
-    // session.codegen()?;
+    session.write_manifest()?;
+    session.codegen()?;
 
     Ok(())
 }
@@ -246,6 +246,20 @@ impl SyncSession {
     }
 
     fn sync_to_roblox(&mut self, auth: String) -> Result<(), SyncError> {
+        Ok(())
+    }
+
+    fn write_manifest(&self) -> Result<(), SyncError> {
+        // TODO: Generate a new manifest based on our current inputs and write
+        // it to disk.
+
+        Ok(())
+    }
+
+    fn codegen(&self) -> Result<(), SyncError> {
+        // TODO: For each input, use its config to write a file pointing to
+        // where the asset ended up.
+
         Ok(())
     }
 }
