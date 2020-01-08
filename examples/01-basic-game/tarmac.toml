@@ -1,0 +1,14 @@
+# tarmac.toml is Tarmac's configuration file.
+# It tells Tarmac how to handle the assets in our project.
+
+# Most projects will define some 'inputs'.
+# This tells Tarmac where to find assets that we'll use in our game.
+[[inputs]]
+
+# For a syntax overview of Tarmac's globs, see:
+# https://docs.rs/globset/0.4.4/globset/#syntax
+glob = "assets/**/*.png"
+
+# Tells Tarmac what kind of link files to generate.
+# This option creates `ModuleScript` instances that return asset URLs.
+codegen = "asset-url"

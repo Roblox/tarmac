@@ -1,0 +1,29 @@
+{
+  "name": "tarmac-example-01-basic-game",
+  "tree": {
+    "$className": "DataModel",
+
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+
+        "Game": {
+          "$path": "src"
+        },
+
+        "Assets": {
+          "$path": "assets"
+        }
+      }
+    },
+
+    "Players": {
+      "$className": "Players",
+      "$properties": {
+        "CharacterAutoLoads": false
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+# Ignore our generated place files.
+# This is good practice for Rojo-managed projects.
+/*.rbxl
+/*.rbxlx
