@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{fmt, fs, path::Path};
 
 use reqwest::{
     header::{HeaderValue, COOKIE},
@@ -26,6 +26,12 @@ pub struct RobloxApiClient {
     auth_token: String,
     csrf_token: Option<HeaderValue>,
     client: Client,
+}
+
+impl fmt::Debug for RobloxApiClient {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "<RobloxApiClient>")
+    }
 }
 
 impl RobloxApiClient {

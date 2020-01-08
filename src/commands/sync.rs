@@ -70,23 +70,19 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
         None => env::current_dir().context(error::CurrentDir)?,
     };
 
-    let mut session = SyncSession::new(&fuzzy_config_path)?;
+    let api_client = global
+        .auth
+        .or_else(get_auth_cookie)
+        .map(|auth| RobloxApiClient::new(auth));
+
+    let mut session = SyncSession::new(api_client, &fuzzy_config_path)?;
 
     session.discover_configs()?;
     session.discover_inputs()?;
 
     match options.target {
-        SyncTarget::Roblox => {
-            let auth = global
-                .auth
-                .or_else(get_auth_cookie)
-                .expect("no auth cookie found");
-
-            // session.sync_to_roblox(auth)?;
-        }
-        SyncTarget::ContentFolder => {
-            // session.sync_to_content_folder()?;
-        }
+        SyncTarget::Roblox => session.sync_to_roblox()?,
+        SyncTarget::ContentFolder => session.sync_to_content_folder()?,
     }
 
     session.write_manifest()?;
@@ -99,6 +95,9 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
 /// command.
 #[derive(Debug)]
 struct SyncSession {
+    /// If available, represents the handle to the Roblox web API.
+    api_client: Option<RobloxApiClient>,
+
     /// The config file pulled from the starting point of the sync operation.
     root_config: Config,
 
@@ -121,7 +120,10 @@ struct SyncInput {
 }
 
 impl SyncSession {
-    fn new(fuzzy_config_path: &Path) -> Result<Self, SyncError> {
+    fn new(
+        api_client: Option<RobloxApiClient>,
+        fuzzy_config_path: &Path,
+    ) -> Result<Self, SyncError> {
         log::trace!("Starting new sync session");
 
         let root_config =
@@ -136,6 +138,7 @@ impl SyncSession {
         };
 
         Ok(Self {
+            api_client,
             root_config,
             non_root_configs: Vec::new(),
             original_manifest,
@@ -245,7 +248,15 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync_to_roblox(&mut self, auth: String) -> Result<(), SyncError> {
+    fn sync_to_roblox(&mut self) -> Result<(), SyncError> {
+        let _client = self.api_client.as_mut().ok_or(SyncError::NoAuth)?;
+
+        // TODO: Group together inputs and upload them to Roblox.
+
+        Ok(())
+    }
+
+    fn sync_to_content_folder(&mut self) -> Result<(), SyncError> {
         Ok(())
     }
 
