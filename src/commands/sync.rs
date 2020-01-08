@@ -219,13 +219,14 @@ impl SyncSession {
             let config_path = config.folder();
 
             for input_config in &config.inputs {
+                let base_path = config_path.join(input_config.glob.get_prefix());
                 log::trace!(
                     "Searching for inputs in '{}' matching '{}'",
-                    config.folder().display(),
+                    base_path.display(),
                     input_config.glob,
                 );
 
-                let filtered_paths = WalkDir::new(config_path)
+                let filtered_paths = WalkDir::new(base_path)
                     .into_iter()
                     // TODO: Properly handle WalkDir errors
                     .filter_map(Result::ok)
