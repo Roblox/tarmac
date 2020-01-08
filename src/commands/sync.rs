@@ -216,31 +216,39 @@ impl SyncSession {
         // Starting with our root config, iterate over all configs and find all
         // relevant inputs
         for config in iter::once(&self.root_config).chain(self.non_root_configs.iter()) {
-            let config_path = config.file_path.as_path();
+            let config_path = config.file_path.as_path().parent().unwrap();
 
             for input_config in &config.inputs {
-                // TODO: Narrow down directory searching; we should be able to
-                // drill down to any non-pattern prefix that this glob specifies
+                log::trace!(
+                    "Searching for inputs in '{}' matching '{}'",
+                    config.folder().display(),
+                    input_config.glob,
+                );
+
                 let filtered_paths = WalkDir::new(config_path)
                     .into_iter()
-                    .filter_entry(|entry| input_config.glob.is_match(entry.path()));
+                    // TODO: Properly handle WalkDir errors
+                    .filter_map(Result::ok)
+                    .filter(|entry| {
+                        let match_path = entry.path().strip_prefix(config_path).unwrap();
+                        input_config.glob.is_match(match_path)
+                    });
 
-                for matching_entry in filtered_paths {
-                    let matching = matching_entry.context(error::WalkDir)?;
+                for matching in filtered_paths {
                     let name = AssetName::from_paths(config_path, matching.path());
-                    if inputs.get(&name).is_some() {
-                        return Err(SyncError::OverlappingGlobs {
-                            path: matching.into_path(),
-                        });
-                    }
 
-                    inputs.insert(
+                    log::trace!("Found input {}", name);
+                    if let Some(existing) = inputs.insert(
                         name,
                         SyncInput {
                             path: matching.into_path(),
                             config: input_config.clone(),
                         },
-                    );
+                    ) {
+                        return Err(SyncError::OverlappingGlobs {
+                            path: existing.path,
+                        });
+                    }
                 }
             }
         }

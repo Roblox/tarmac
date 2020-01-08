@@ -1,7 +1,7 @@
 //! Wrapper around globset's Glob type that has better serialization
 //! characteristics by coupling Glob and GlobMatcher into a single type.
 
-use std::path::Path;
+use std::{fmt, path::Path};
 
 use globset::{Glob as InnerGlob, GlobMatcher};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
@@ -46,5 +46,11 @@ impl<'de> Deserialize<'de> for Glob {
         let glob = <&str as Deserialize>::deserialize(deserializer)?;
 
         Glob::new(glob).map_err(D::Error::custom)
+    }
+}
+
+impl fmt::Display for Glob {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.inner.fmt(f)
     }
 }
