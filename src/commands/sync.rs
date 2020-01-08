@@ -216,7 +216,7 @@ impl SyncSession {
         // Starting with our root config, iterate over all configs and find all
         // relevant inputs
         for config in iter::once(&self.root_config).chain(self.non_root_configs.iter()) {
-            let config_path = config.file_path.as_path().parent().unwrap();
+            let config_path = config.folder();
 
             for input_config in &config.inputs {
                 log::trace!(
