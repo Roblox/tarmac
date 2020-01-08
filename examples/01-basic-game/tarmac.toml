@@ -1,6 +1,8 @@
 # tarmac.toml is Tarmac's configuration file.
 # It tells Tarmac how to handle the assets in our project.
 
+name = "01-basic-game"
+
 # Most projects will define some 'inputs'.
 # This tells Tarmac where to find assets that we'll use in our game.
 [[inputs]]
