@@ -14,7 +14,7 @@ use crate::{
     auth_cookie::get_auth_cookie,
     data::{Config, InputConfig, Manifest},
     options::{GlobalOptions, SyncOptions, SyncTarget},
-    roblox_web_api::RobloxApiClient,
+    roblox_web_api::{ImageUploadData, RobloxApiClient},
 };
 
 use self::error::Error;
@@ -26,20 +26,29 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
         None => env::current_dir().context(error::CurrentDir)?,
     };
 
-    let api_client = global
+    let mut api_client = global
         .auth
         .or_else(get_auth_cookie)
         .map(|auth| RobloxApiClient::new(auth));
 
-    let mut session = SyncSession::new(api_client, &fuzzy_config_path)?;
+    let mut session = SyncSession::new(&fuzzy_config_path)?;
 
     session.discover_configs()?;
     session.discover_inputs()?;
 
-    match options.target {
-        SyncTarget::Roblox => session.sync_to_roblox()?,
-        SyncTarget::ContentFolder => session.sync_to_content_folder()?,
-    }
+    let strategy = match options.target {
+        SyncTarget::Roblox => {
+            let api_client = api_client.as_mut().ok_or(Error::NoAuth)?;
+            let mut strategy = RobloxUploadStrategy { api_client };
+
+            session.sync(&mut strategy)?;
+        }
+        SyncTarget::ContentFolder => {
+            let mut strategy = ContentUploadStrategy {};
+
+            session.sync(&mut strategy)?;
+        }
+    };
 
     session.write_manifest()?;
     session.codegen()?;
@@ -51,9 +60,6 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
 /// command.
 #[derive(Debug)]
 struct SyncSession {
-    /// If available, represents the handle to the Roblox web API.
-    api_client: Option<RobloxApiClient>,
-
     /// The config file pulled from the starting point of the sync operation.
     root_config: Config,
 
@@ -76,7 +82,7 @@ struct SyncInput {
 }
 
 impl SyncSession {
-    fn new(api_client: Option<RobloxApiClient>, fuzzy_config_path: &Path) -> Result<Self, Error> {
+    fn new(fuzzy_config_path: &Path) -> Result<Self, Error> {
         log::trace!("Starting new sync session");
 
         let root_config =
@@ -91,7 +97,6 @@ impl SyncSession {
         };
 
         Ok(Self {
-            api_client,
             root_config,
             non_root_configs: Vec::new(),
             original_manifest,
@@ -225,9 +230,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync_to_roblox(&mut self) -> Result<(), Error> {
-        let _client = self.api_client.as_mut().ok_or(Error::NoAuth)?;
-
+    fn sync<S: UploadStrategy>(&mut self, strategy: &mut S) -> Result<(), Error> {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         struct InputCompatibility {
             packable: bool,
@@ -255,7 +258,7 @@ impl SyncSession {
                     let input = self.inputs.get(&input_name).unwrap();
 
                     if is_image_asset(&input.path) {
-                        self.sync_unpackable_image(&input_name)?;
+                        self.sync_unpackable_image(strategy, &input_name)?;
                     } else {
                         log::warn!("Didn't know what to do with asset {}", input.path.display());
                     }
@@ -266,11 +269,11 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync_to_content_folder(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn sync_unpackable_image(&mut self, input_name: &AssetName) -> Result<(), Error> {
+    fn sync_unpackable_image<S: UploadStrategy>(
+        &mut self,
+        strategy: &mut S,
+        input_name: &AssetName,
+    ) -> Result<(), Error> {
         let input = self.inputs.get(input_name).unwrap();
         let mut contents = LazyFileContents::new(&input.path);
 
@@ -281,16 +284,16 @@ impl SyncSession {
                         let hash = contents.hash()?;
 
                         if hash != prev_hash {
-                            return self.upload_unpacked_image();
+                            return strategy.upload(input_name, contents);
                         }
                     }
                     None => {
-                        return self.upload_unpacked_image();
+                        return strategy.upload(input_name, contents);
                     }
                 }
 
                 if input_manifest.id.is_none() {
-                    return self.upload_unpacked_image();
+                    return strategy.upload(input_name, contents);
                 }
 
                 let prev_config = self.original_manifest.configs.get(&input_manifest.config);
@@ -298,16 +301,16 @@ impl SyncSession {
                 match prev_config {
                     Some(prev_config) => {
                         if prev_config != &input.config {
-                            return self.upload_unpacked_image();
+                            return strategy.upload(input_name, contents);
                         }
                     }
                     None => {
-                        return self.upload_unpacked_image();
+                        return strategy.upload(input_name, contents);
                     }
                 }
             }
             None => {
-                return self.upload_unpacked_image();
+                return strategy.upload(input_name, contents);
             }
         }
 
@@ -332,6 +335,55 @@ impl SyncSession {
         // where the asset ended up.
 
         Ok(())
+    }
+}
+
+trait UploadStrategy {
+    fn upload(&mut self, name: &AssetName, contents: LazyFileContents) -> Result<(), SyncError>;
+}
+
+struct RobloxUploadStrategy<'a> {
+    api_client: &'a mut RobloxApiClient,
+}
+
+impl<'a> UploadStrategy for RobloxUploadStrategy<'a> {
+    fn upload(
+        &mut self,
+        name: &AssetName,
+        mut contents: LazyFileContents,
+    ) -> Result<(), SyncError> {
+        let name = contents
+            .path
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let image_data = Cow::Borrowed(contents.get()?);
+
+        log::info!("Uploading {}", &name);
+
+        let response = self
+            .api_client
+            .upload_image(ImageUploadData {
+                image_data,
+                name: &name,
+                description: "Uploaded by Tarmac.",
+            })
+            .expect("Upload failed");
+
+        log::info!("Uploaded {} to ID {}", name, response.backing_asset_id);
+
+        Ok(())
+    }
+}
+
+struct ContentUploadStrategy {}
+
+impl UploadStrategy for ContentUploadStrategy {
+    fn upload(&mut self, name: &AssetName, contents: LazyFileContents) -> Result<(), SyncError> {
+        unimplemented!("content folder uploading");
     }
 }
 

@@ -1,4 +1,4 @@
-use std::fs;
+use std::{borrow::Cow, fs};
 
 use crate::{
     auth_cookie::get_auth_cookie,
@@ -18,7 +18,7 @@ pub fn upload_image(global: GlobalOptions, options: UploadImageOptions) {
     let mut client = RobloxApiClient::new(auth);
 
     let upload_data = ImageUploadData {
-        image_data,
+        image_data: Cow::Owned(image_data),
         name: &options.name,
         description: &options.description,
     };
