@@ -17,53 +17,7 @@ use crate::{
     roblox_web_api::RobloxApiClient,
 };
 
-mod error {
-    use crate::data::{ConfigError, ManifestError};
-    use snafu::Snafu;
-    use std::{io, path::PathBuf};
-    use walkdir;
-
-    #[derive(Debug, Snafu)]
-    #[snafu(visibility = "pub(super)")]
-    pub enum SyncError {
-        #[snafu(display("{}", source))]
-        Config {
-            source: ConfigError,
-        },
-
-        #[snafu(display("{}", source))]
-        Manifest {
-            source: ManifestError,
-        },
-
-        Io {
-            path: PathBuf,
-            source: io::Error,
-        },
-
-        #[snafu(display("couldn't get the current directory of the process"))]
-        CurrentDir {
-            source: io::Error,
-        },
-
-        #[snafu(display("'tarmac sync' requires an authentication cookie"))]
-        NoAuth,
-
-        // TODO: Add more detail here and better display
-        #[snafu(display("{}", source))]
-        WalkDir {
-            source: walkdir::Error,
-        },
-
-        // TODO: Add more detail here and better display
-        #[snafu(display("Path {} was described by more than one glob", path.display()))]
-        OverlappingGlobs {
-            path: PathBuf,
-        },
-    }
-}
-
-pub use error::SyncError;
+pub use self::error::SyncError;
 
 pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError> {
     let fuzzy_config_path = match options.config_path {
@@ -418,4 +372,50 @@ fn is_image_asset(path: &Path) -> bool {
 
 fn generate_asset_hash(content: &[u8]) -> String {
     format!("{:x}", Sha256::digest(content))
+}
+
+mod error {
+    use crate::data::{ConfigError, ManifestError};
+    use snafu::Snafu;
+    use std::{io, path::PathBuf};
+    use walkdir;
+
+    #[derive(Debug, Snafu)]
+    #[snafu(visibility = "pub(super)")]
+    pub enum SyncError {
+        #[snafu(display("{}", source))]
+        Config {
+            source: ConfigError,
+        },
+
+        #[snafu(display("{}", source))]
+        Manifest {
+            source: ManifestError,
+        },
+
+        Io {
+            path: PathBuf,
+            source: io::Error,
+        },
+
+        #[snafu(display("couldn't get the current directory of the process"))]
+        CurrentDir {
+            source: io::Error,
+        },
+
+        #[snafu(display("'tarmac sync' requires an authentication cookie"))]
+        NoAuth,
+
+        // TODO: Add more detail here and better display
+        #[snafu(display("{}", source))]
+        WalkDir {
+            source: walkdir::Error,
+        },
+
+        // TODO: Add more detail here and better display
+        #[snafu(display("Path {} was described by more than one glob", path.display()))]
+        OverlappingGlobs {
+            path: PathBuf,
+        },
+    }
 }
