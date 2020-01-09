@@ -101,6 +101,11 @@ impl SyncSession {
         })
     }
 
+    /// Locate all of the configs connected to our root config.
+    ///
+    /// Tarmac config files can include eachother via the `includes` field,
+    /// which will search the given path for other config files and use them as
+    /// part of the sync.
     fn discover_configs(&mut self) -> Result<(), SyncError> {
         let mut to_search = VecDeque::new();
         to_search.extend(
@@ -119,22 +124,30 @@ impl SyncSession {
                 // check that it's a Tarmac config and include it.
 
                 let config = Config::read_from_file(&search_path).context(error::Config)?;
+
+                // Include any configs that this config references.
                 to_search.extend(config.includes.iter().map(|include| include.path.clone()));
+
                 self.non_root_configs.push(config);
             } else {
                 // If this directory contains a config file, we can stop
                 // traversing this branch.
 
                 match Config::read_from_folder(&search_path) {
-                    // We found a config, we're done here
                     Ok(config) => {
+                        // We found a config, we're done here.
+
+                        // Append config include paths from this config
                         to_search
                             .extend(config.includes.iter().map(|include| include.path.clone()));
+
                         self.non_root_configs.push(config);
                     }
 
-                    // We didn't find a config, keep searching
                     Err(err) if err.is_not_found() => {
+                        // We didn't find a config, keep searching down this
+                        // branch of the filesystem.
+
                         let children =
                             fs::read_dir(&search_path).context(error::Io { path: &search_path })?;
 
@@ -154,7 +167,6 @@ impl SyncSession {
                         }
                     }
 
-                    // We hit some other error, cascade it upwards
                     err @ Err(_) => {
                         err.context(error::Config)?;
                     }
@@ -165,6 +177,7 @@ impl SyncSession {
         Ok(())
     }
 
+    /// Find all files on the filesystem referenced as inputs by our configs.
     fn discover_inputs(&mut self) -> Result<(), SyncError> {
         let inputs = &mut self.inputs;
 
@@ -192,15 +205,17 @@ impl SyncSession {
 
                 for matching in filtered_paths {
                     let name = AssetName::from_paths(config_path, matching.path());
-
                     log::trace!("Found input {}", name);
-                    if let Some(existing) = inputs.insert(
+
+                    let already_found = inputs.insert(
                         name,
                         SyncInput {
                             path: matching.into_path(),
                             config: input_config.clone(),
                         },
-                    ) {
+                    );
+
+                    if let Some(existing) = already_found {
                         return Err(SyncError::OverlappingGlobs {
                             path: existing.path,
                         });
