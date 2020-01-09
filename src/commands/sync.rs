@@ -17,9 +17,10 @@ use crate::{
     roblox_web_api::RobloxApiClient,
 };
 
-pub use self::error::SyncError;
+use self::error::Error;
+pub use self::error::Error as SyncError;
 
-pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError> {
+pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
     let fuzzy_config_path = match options.config_path {
         Some(v) => v,
         None => env::current_dir().context(error::CurrentDir)?,
@@ -75,10 +76,7 @@ struct SyncInput {
 }
 
 impl SyncSession {
-    fn new(
-        api_client: Option<RobloxApiClient>,
-        fuzzy_config_path: &Path,
-    ) -> Result<Self, SyncError> {
+    fn new(api_client: Option<RobloxApiClient>, fuzzy_config_path: &Path) -> Result<Self, Error> {
         log::trace!("Starting new sync session");
 
         let root_config =
@@ -106,7 +104,7 @@ impl SyncSession {
     /// Tarmac config files can include eachother via the `includes` field,
     /// which will search the given path for other config files and use them as
     /// part of the sync.
-    fn discover_configs(&mut self) -> Result<(), SyncError> {
+    fn discover_configs(&mut self) -> Result<(), Error> {
         let mut to_search = VecDeque::new();
         to_search.extend(
             self.root_config
@@ -178,7 +176,7 @@ impl SyncSession {
     }
 
     /// Find all files on the filesystem referenced as inputs by our configs.
-    fn discover_inputs(&mut self) -> Result<(), SyncError> {
+    fn discover_inputs(&mut self) -> Result<(), Error> {
         let inputs = &mut self.inputs;
 
         // Starting with our root config, iterate over all configs and find all
@@ -216,7 +214,7 @@ impl SyncSession {
                     );
 
                     if let Some(existing) = already_found {
-                        return Err(SyncError::OverlappingGlobs {
+                        return Err(Error::OverlappingGlobs {
                             path: existing.path,
                         });
                     }
@@ -227,8 +225,8 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync_to_roblox(&mut self) -> Result<(), SyncError> {
-        let _client = self.api_client.as_mut().ok_or(SyncError::NoAuth)?;
+    fn sync_to_roblox(&mut self) -> Result<(), Error> {
+        let _client = self.api_client.as_mut().ok_or(Error::NoAuth)?;
 
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         struct InputCompatibility {
@@ -268,11 +266,11 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync_to_content_folder(&mut self) -> Result<(), SyncError> {
+    fn sync_to_content_folder(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
-    fn sync_unpackable_image(&mut self, input_name: &AssetName) -> Result<(), SyncError> {
+    fn sync_unpackable_image(&mut self, input_name: &AssetName) -> Result<(), Error> {
         let input = self.inputs.get(input_name).unwrap();
         let mut contents = LazyFileContents::new(&input.path);
 
@@ -316,20 +314,20 @@ impl SyncSession {
         Ok(())
     }
 
-    fn upload_unpacked_image(&mut self) -> Result<(), SyncError> {
+    fn upload_unpacked_image(&mut self) -> Result<(), Error> {
         // TODO
 
         Ok(())
     }
 
-    fn write_manifest(&self) -> Result<(), SyncError> {
+    fn write_manifest(&self) -> Result<(), Error> {
         // TODO: Generate a new manifest based on our current inputs and write
         // it to disk.
 
         Ok(())
     }
 
-    fn codegen(&self) -> Result<(), SyncError> {
+    fn codegen(&self) -> Result<(), Error> {
         // TODO: For each input, use its config to write a file pointing to
         // where the asset ended up.
 
@@ -354,7 +352,7 @@ impl<'a> LazyFileContents<'a> {
         }
     }
 
-    fn get(&mut self) -> Result<&[u8], SyncError> {
+    fn get(&mut self) -> Result<&[u8], Error> {
         if self.contents.is_some() {
             Ok(self.contents.as_ref().unwrap())
         } else {
@@ -365,7 +363,7 @@ impl<'a> LazyFileContents<'a> {
         }
     }
 
-    fn hash(&mut self) -> Result<&str, SyncError> {
+    fn hash(&mut self) -> Result<&str, Error> {
         if self.hash.is_some() {
             Ok(self.hash.as_ref().unwrap())
         } else {
@@ -397,7 +395,7 @@ mod error {
 
     #[derive(Debug, Snafu)]
     #[snafu(visibility = "pub(super)")]
-    pub enum SyncError {
+    pub enum Error {
         #[snafu(display("{}", source))]
         Config {
             source: ConfigError,
