@@ -314,18 +314,15 @@ impl SyncSession {
                         let hash = contents.hash()?;
 
                         if hash != prev_hash {
-                            // upload this!
                             return self.upload_unpacked_image();
                         }
                     }
                     None => {
-                        // upload this!
                         return self.upload_unpacked_image();
                     }
                 }
 
                 if input_manifest.id.is_none() {
-                    // upload this.
                     return self.upload_unpacked_image();
                 }
 
@@ -334,17 +331,15 @@ impl SyncSession {
                 match prev_config {
                     Some(prev_config) => {
                         if prev_config != &input.config {
-                            // upload!
+                            return self.upload_unpacked_image();
                         }
                     }
                     None => {
-                        // malformed manifest, let's upload.
                         return self.upload_unpacked_image();
                     }
                 }
             }
             None => {
-                // upload this.
                 return self.upload_unpacked_image();
             }
         }
