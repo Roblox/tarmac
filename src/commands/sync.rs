@@ -36,7 +36,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
     session.discover_configs()?;
     session.discover_inputs()?;
 
-    let strategy = match options.target {
+    match options.target {
         SyncTarget::Roblox => {
             let api_client = api_client.as_mut().ok_or(Error::NoAuth)?;
             let mut strategy = RobloxUploadStrategy { api_client };
@@ -48,7 +48,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
 
             session.sync(&mut strategy)?;
         }
-    };
+    }
 
     session.write_manifest()?;
     session.codegen()?;
@@ -275,25 +275,33 @@ impl SyncSession {
         input_name: &AssetName,
     ) -> Result<(), Error> {
         let input = self.inputs.get(input_name).unwrap();
-        let mut contents = LazyFileContents::new(&input.path);
+        let contents = fs::read(&input.path).context(error::Io { path: &input.path })?;
+        let hash = generate_asset_hash(&contents);
+
+        let upload_data = UploadData {
+            name: input_name.clone(),
+            contents,
+            hash: hash.clone(),
+        };
 
         match self.original_manifest.inputs.get(&input_name) {
             Some(input_manifest) => {
                 match &input_manifest.hash {
                     Some(prev_hash) => {
-                        let hash = contents.hash()?;
-
-                        if hash != prev_hash {
-                            return strategy.upload(input_name, contents);
+                        if &hash != prev_hash {
+                            strategy.upload(upload_data)?;
+                            return Ok(());
                         }
                     }
                     None => {
-                        return strategy.upload(input_name, contents);
+                        strategy.upload(upload_data)?;
+                        return Ok(());
                     }
                 }
 
                 if input_manifest.id.is_none() {
-                    return strategy.upload(input_name, contents);
+                    strategy.upload(upload_data)?;
+                    return Ok(());
                 }
 
                 let prev_config = self.original_manifest.configs.get(&input_manifest.config);
@@ -301,24 +309,21 @@ impl SyncSession {
                 match prev_config {
                     Some(prev_config) => {
                         if prev_config != &input.config {
-                            return strategy.upload(input_name, contents);
+                            strategy.upload(upload_data)?;
+                            return Ok(());
                         }
                     }
                     None => {
-                        return strategy.upload(input_name, contents);
+                        strategy.upload(upload_data)?;
+                        return Ok(());
                     }
                 }
             }
             None => {
-                return strategy.upload(input_name, contents);
+                strategy.upload(upload_data)?;
+                return Ok(());
             }
         }
-
-        Ok(())
-    }
-
-    fn upload_unpacked_image(&mut self) -> Result<(), Error> {
-        // TODO
 
         Ok(())
     }
@@ -338,8 +343,18 @@ impl SyncSession {
     }
 }
 
+struct UploadResponse {
+    id: u64,
+}
+
+struct UploadData {
+    name: AssetName,
+    contents: Vec<u8>,
+    hash: String,
+}
+
 trait UploadStrategy {
-    fn upload(&mut self, name: &AssetName, contents: LazyFileContents) -> Result<(), SyncError>;
+    fn upload(&mut self, data: UploadData) -> Result<UploadResponse, SyncError>;
 }
 
 struct RobloxUploadStrategy<'a> {
@@ -347,82 +362,37 @@ struct RobloxUploadStrategy<'a> {
 }
 
 impl<'a> UploadStrategy for RobloxUploadStrategy<'a> {
-    fn upload(
-        &mut self,
-        name: &AssetName,
-        mut contents: LazyFileContents,
-    ) -> Result<(), SyncError> {
-        let name = contents
-            .path
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
-
-        let image_data = Cow::Borrowed(contents.get()?);
-
-        log::info!("Uploading {}", &name);
+    fn upload(&mut self, data: UploadData) -> Result<UploadResponse, SyncError> {
+        log::info!("Uploading {}", &data.name);
 
         let response = self
             .api_client
             .upload_image(ImageUploadData {
-                image_data,
-                name: &name,
+                image_data: Cow::Owned(data.contents),
+                name: data.name.as_ref(),
                 description: "Uploaded by Tarmac.",
             })
             .expect("Upload failed");
 
-        log::info!("Uploaded {} to ID {}", name, response.backing_asset_id);
+        log::info!(
+            "Uploaded {} to ID {}",
+            &data.name,
+            response.backing_asset_id
+        );
 
-        Ok(())
+        Ok(UploadResponse {
+            id: response.backing_asset_id,
+        })
     }
 }
 
-struct ContentUploadStrategy {}
+struct ContentUploadStrategy {
+    // TODO: Studio install information
+}
 
 impl UploadStrategy for ContentUploadStrategy {
-    fn upload(&mut self, name: &AssetName, contents: LazyFileContents) -> Result<(), SyncError> {
+    fn upload(&mut self, _data: UploadData) -> Result<UploadResponse, SyncError> {
         unimplemented!("content folder uploading");
-    }
-}
-
-/// Represents a file for which we may or may not have read its contents or
-/// calculated their hash.
-struct LazyFileContents<'a> {
-    path: Cow<'a, Path>,
-    contents: Option<Vec<u8>>,
-    hash: Option<String>,
-}
-
-impl<'a> LazyFileContents<'a> {
-    fn new(path: impl Into<Cow<'a, Path>>) -> Self {
-        Self {
-            path: path.into(),
-            contents: None,
-            hash: None,
-        }
-    }
-
-    fn get(&mut self) -> Result<&[u8], Error> {
-        if self.contents.is_some() {
-            Ok(self.contents.as_ref().unwrap())
-        } else {
-            let contents = fs::read(&self.path).context(error::Io { path: &*self.path })?;
-
-            self.contents = Some(contents);
-            Ok(self.contents.as_ref().unwrap())
-        }
-    }
-
-    fn hash(&mut self) -> Result<&str, Error> {
-        if self.hash.is_some() {
-            Ok(self.hash.as_ref().unwrap())
-        } else {
-            let contents = self.get()?;
-            self.hash = Some(generate_asset_hash(contents));
-            Ok(self.hash.as_ref().unwrap())
-        }
     }
 }
 

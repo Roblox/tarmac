@@ -35,6 +35,12 @@ impl AssetName {
     }
 }
 
+impl AsRef<str> for AssetName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 impl fmt::Display for AssetName {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "{}", self.0)
