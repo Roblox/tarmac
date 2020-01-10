@@ -12,7 +12,7 @@ use walkdir::WalkDir;
 use crate::{
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
-    data::{Config, InputConfig, Manifest},
+    data::{Config, InputConfig, InputManifest, Manifest},
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
 };
@@ -79,6 +79,8 @@ struct SyncSession {
 struct SyncInput {
     path: PathBuf,
     config: InputConfig,
+    hash: Option<String>,
+    id: Option<u64>,
 }
 
 impl SyncSession {
@@ -215,6 +217,8 @@ impl SyncSession {
                         SyncInput {
                             path: matching.into_path(),
                             config: input_config.clone(),
+                            hash: None,
+                            id: None,
                         },
                     );
 
@@ -266,6 +270,9 @@ impl SyncSession {
             }
         }
 
+        // TODO: Clean up output of inputs that were present in the previous
+        // sync but are no longer present.
+
         Ok(())
     }
 
@@ -274,9 +281,11 @@ impl SyncSession {
         strategy: &mut S,
         input_name: &AssetName,
     ) -> Result<(), Error> {
-        let input = self.inputs.get(input_name).unwrap();
+        let input = self.inputs.get_mut(input_name).unwrap();
         let contents = fs::read(&input.path).context(error::Io { path: &input.path })?;
         let hash = generate_asset_hash(&contents);
+
+        input.hash = Some(hash.clone());
 
         let upload_data = UploadData {
             name: input_name.clone(),
@@ -284,53 +293,69 @@ impl SyncSession {
             hash: hash.clone(),
         };
 
-        match self.original_manifest.inputs.get(&input_name) {
-            Some(input_manifest) => {
-                match &input_manifest.hash {
-                    Some(prev_hash) => {
-                        if &hash != prev_hash {
-                            strategy.upload(upload_data)?;
-                            return Ok(());
-                        }
-                    }
-                    None => {
-                        strategy.upload(upload_data)?;
-                        return Ok(());
-                    }
-                }
+        let id = if let Some(input_manifest) = self.original_manifest.inputs.get(&input_name) {
+            // This input existed during our last sync operation. We'll compare
+            // the current state with the previous one to see if we need to take
+            // action.
 
-                if input_manifest.id.is_none() {
-                    strategy.upload(upload_data)?;
-                    return Ok(());
-                }
+            if input_manifest.hash.as_ref() != Some(&hash) {
+                // The file's contents have been edited since the last sync.
 
-                let prev_config = self.original_manifest.configs.get(&input_manifest.config);
+                strategy.upload(upload_data)?.id
+            } else if let Some(prev_id) = input_manifest.id {
+                // The file's contents are the same as the previous sync and
+                // this image has been uploaded previously.
 
-                match prev_config {
-                    Some(prev_config) => {
-                        if prev_config != &input.config {
-                            strategy.upload(upload_data)?;
-                            return Ok(());
-                        }
-                    }
-                    None => {
-                        strategy.upload(upload_data)?;
-                        return Ok(());
-                    }
+                if &input_manifest.config != &input.config {
+                    // Only the file's config has changed.
+                    //
+                    // TODO: We might not need to reupload this image?
+
+                    strategy.upload(upload_data)?.id
+                } else {
+                    // Nothing has changed, we're good to go!
+
+                    prev_id
                 }
+            } else {
+                // This image has never been uploaded, but its hash is present
+                // in the manifest.
+
+                strategy.upload(upload_data)?.id
             }
-            None => {
-                strategy.upload(upload_data)?;
-                return Ok(());
-            }
-        }
+        } else {
+            // This input was added since the last sync, if there was one.
+
+            strategy.upload(upload_data)?.id
+        };
+
+        input.id = Some(id);
 
         Ok(())
     }
 
     fn write_manifest(&self) -> Result<(), Error> {
-        // TODO: Generate a new manifest based on our current inputs and write
-        // it to disk.
+        let mut manifest = Manifest::default();
+
+        manifest.inputs = self
+            .inputs
+            .iter()
+            .map(|(name, input)| {
+                (
+                    name.clone(),
+                    InputManifest {
+                        hash: input.hash.clone(),
+                        id: input.id,
+                        slice: None,
+                        config: input.config.clone(),
+                    },
+                )
+            })
+            .collect();
+
+        manifest
+            .write_to_folder(self.root_config.folder())
+            .context(error::Manifest)?;
 
         Ok(())
     }

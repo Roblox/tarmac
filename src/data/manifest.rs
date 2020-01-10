@@ -15,7 +15,6 @@ static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 /// sync operation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Manifest {
-    pub configs: BTreeMap<AssetName, InputConfig>,
     pub inputs: BTreeMap<AssetName, InputManifest>,
 }
 
@@ -57,7 +56,7 @@ pub struct InputManifest {
 
     /// The config applied to this config the last time it was part of an
     /// upload.
-    pub config: AssetName,
+    pub config: InputConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
