@@ -345,6 +345,8 @@ impl SyncSession {
 
 struct UploadResponse {
     id: u64,
+    // TODO: Other asset URL construction information to support content folder
+    // shenanigans.
 }
 
 struct UploadData {
