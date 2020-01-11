@@ -32,7 +32,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
     let mut api_client = global
         .auth
         .or_else(get_auth_cookie)
-        .map(|auth| RobloxApiClient::new(auth));
+        .map(RobloxApiClient::new);
 
     let mut session = SyncSession::new(&fuzzy_config_path)?;
 
@@ -313,7 +313,7 @@ impl SyncSession {
                 // The file's contents are the same as the previous sync and
                 // this image has been uploaded previously.
 
-                if &input_manifest.config != &input.config {
+                if input_manifest.config != input.config {
                     // Only the file's config has changed.
                     //
                     // TODO: We might not need to reupload this image?
