@@ -9,7 +9,7 @@ use std::{
 
 use png;
 use sha2::{Digest, Sha256};
-use sheep::{self, InputSprite, SimplePacker};
+use sheep::{self, Format, InputSprite, SimplePacker};
 use snafu::ResultExt;
 use walkdir::WalkDir;
 
@@ -19,6 +19,7 @@ use crate::{
     data::{CodegenKind, Config, InputConfig, InputManifest, Manifest},
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
+    spritesheet::{OutputFormat, PackOutput},
 };
 
 use self::error::Error;
@@ -124,7 +125,7 @@ impl SyncSession {
 
     /// Locate all of the configs connected to our root config.
     ///
-    /// Tarmac config files can include eachother via the `includes` field,
+    /// Tarmac config files can include each other via the `includes` field,
     /// which will search the given path for other config files and use them as
     /// part of the sync.
     fn discover_configs(&mut self) -> Result<(), Error> {
@@ -294,7 +295,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn pack_images(&self, input_group: Vec<AssetName>) -> Result<Vec<PathBuf>, SyncError> {
+    fn pack_images(&self, input_group: Vec<AssetName>) -> Result<Vec<PackOutput>, SyncError> {
         log::info!("Packing {} compatible images", input_group.len());
 
         let mut packable_inputs = Vec::new();
@@ -323,9 +324,16 @@ impl SyncSession {
             packable_inputs.push(InputSprite { bytes, dimensions })
         }
 
-        let results = sheep::pack::<SimplePacker>(packable_inputs, 4, ());
-        for result in results.into_iter() {
-            let output_file = fs::File::create(Path::new("packed.png")).unwrap();
+        let pack_results = sheep::pack::<SimplePacker>(packable_inputs, 4, ());
+        let mut outputs = Vec::new();
+
+        for result in pack_results.into_iter() {
+            // FIXME: Ridiculous cloning of AssetName vec
+            let format = sheep::encode::<OutputFormat>(&result, input_group.clone());
+            let hash = generate_asset_hash(&result.bytes);
+
+            let path = PathBuf::from(format!("{}.png", hash));
+            let output_file = fs::File::create(&path).unwrap();
             let writer = BufWriter::new(output_file);
 
             let mut encoder = png::Encoder::new(writer, result.dimensions.0, result.dimensions.1);
@@ -334,9 +342,11 @@ impl SyncSession {
 
             let mut output_writer = encoder.write_header().unwrap();
             output_writer.write_image_data(&result.bytes).unwrap();
+
+            // outputs.push(PackOutput { path, slices });
         }
 
-        Ok(vec![PathBuf::from("packed.png")])
+        Ok(outputs)
     }
 
     fn sync_unpackable_image<S: UploadStrategy>(
