@@ -1,28 +1,25 @@
 [inputs."dont-pack-these/hello.png"]
 hash = "8d934edb7179e560668c1f8545e06133389f177f972ef5f0ddaf4738b9ba6f86"
-id = 4588952898
-
-[inputs."dont-pack-these/hello.png".config]
-glob = "dont-pack-these/**/*.png"
-codegen = "url-and-slice"
+id = 4597156087
 packable = false
-[inputs."pack-these/a.png".config]
-glob = "pack-these/**/*.png"
 codegen = "url-and-slice"
+
+[inputs."pack-these/a.png"]
 packable = true
-[inputs."pack-these/b.png".config]
-glob = "pack-these/**/*.png"
 codegen = "url-and-slice"
+
+[inputs."pack-these/b.png"]
 packable = true
-[inputs."pack-these/c.png".config]
-glob = "pack-these/**/*.png"
 codegen = "url-and-slice"
+
+[inputs."pack-these/c.png"]
 packable = true
-[inputs."pack-these/d.png".config]
-glob = "pack-these/**/*.png"
 codegen = "url-and-slice"
+
+[inputs."pack-these/d.png"]
 packable = true
-[inputs."pack-these/e.png".config]
-glob = "pack-these/**/*.png"
 codegen = "url-and-slice"
+
+[inputs."pack-these/e.png"]
 packable = true
+codegen = "url-and-slice"
