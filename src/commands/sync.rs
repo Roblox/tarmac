@@ -79,7 +79,7 @@ struct SyncSession {
 
 #[derive(Debug)]
 struct SyncInput {
-    /// The absolute path on disk to the file containing this input.
+    /// The path on disk to the file containing this input.
     path: PathBuf,
 
     /// An index into SyncSession::configs representing the config that applies
@@ -330,7 +330,9 @@ impl SyncSession {
                 let config = &self.configs[input.config_index.0];
                 let input_config = &config.inputs[input.config_index.1];
 
-                if &input_manifest.config != input_config {
+                if input_manifest.packable != input_config.packable
+                    || input_manifest.codegen != input_config.codegen
+                {
                     // Only the file's config has changed.
                     //
                     // TODO: We might not need to reupload this image?
@@ -384,7 +386,8 @@ impl SyncSession {
                         hash: input.hash.clone(),
                         id: input.id,
                         slice: None,
-                        config: input_config.clone(),
+                        packable: input_config.packable,
+                        codegen: input_config.codegen,
                     },
                 )
             })

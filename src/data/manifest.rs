@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
-use crate::{asset_name::AssetName, data::config::InputConfig};
+use crate::{asset_name::AssetName, data::config::CodegenKind};
 
 static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 
@@ -36,6 +36,8 @@ impl Manifest {
         let serialized = toml::to_vec(self).context(SerializeToml)?;
         fs::write(file_path, serialized).context(Io { file_path })?;
 
+        log::trace!("Saved manifest to {}", file_path.display());
+
         Ok(())
     }
 }
@@ -54,9 +56,13 @@ pub struct InputManifest {
     /// the portion of the uploaded image that contains this input.
     pub slice: Option<ImageSlice>,
 
-    /// The config applied to this config the last time it was part of an
-    /// upload.
-    pub config: InputConfig,
+    /// Whether the config applied to this input asked for it to be packed into
+    /// a spritesheet.
+    pub packable: bool,
+
+    /// The kind of Lua code that was generated during the last sync for this
+    /// input.
+    pub codegen: CodegenKind,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
