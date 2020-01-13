@@ -3,11 +3,13 @@ use std::{
     collections::{HashMap, VecDeque},
     env, fmt,
     fs::{self, File},
-    io::Write,
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
 
+use png;
 use sha2::{Digest, Sha256};
+use sheep::{self, InputSprite, SimplePacker};
 use snafu::ResultExt;
 use walkdir::WalkDir;
 
@@ -270,7 +272,7 @@ impl SyncSession {
 
         for (compatibility, group) in compatible_input_groups {
             if compatibility.packable {
-                log::warn!("TODO: Support packing images");
+                let packed = self.pack_images(group)?;
             } else {
                 for input_name in group {
                     let input = self.inputs.get(&input_name).unwrap();
@@ -290,6 +292,51 @@ impl SyncSession {
         // sync but are no longer present.
 
         Ok(())
+    }
+
+    fn pack_images(&self, input_group: Vec<AssetName>) -> Result<Vec<PathBuf>, SyncError> {
+        log::info!("Packing {} compatible images", input_group.len());
+
+        let mut packable_inputs = Vec::new();
+        for asset_name in input_group.iter() {
+            let path = self.inputs.get(asset_name).unwrap().path.as_path();
+
+            let image_file = fs::File::open(path).context(error::Io { path })?;
+            let decoder = png::Decoder::new(image_file);
+
+            let (info, mut reader) = decoder.read_info().context(error::PngDecode)?;
+            let dimensions = (info.width, info.height);
+
+            let mut bytes = vec![0; info.buffer_size()];
+            reader.next_frame(&mut bytes).context(error::PngDecode)?;
+
+            log::trace!(
+                "Input: {}\n\tDimensions: ({}, {})\n\tBitDepth: {:?}\n\tColorType: {:?}\n\tBytes: {}",
+                path.file_name().unwrap().to_str().unwrap(),
+                dimensions.0,
+                dimensions.1,
+                info.bit_depth,
+                info.color_type,
+                bytes.len()
+            );
+
+            packable_inputs.push(InputSprite { bytes, dimensions })
+        }
+
+        let results = sheep::pack::<SimplePacker>(packable_inputs, 4, ());
+        for result in results.into_iter() {
+            let output_file = fs::File::create(Path::new("packed.png")).unwrap();
+            let writer = BufWriter::new(output_file);
+
+            let mut encoder = png::Encoder::new(writer, result.dimensions.0, result.dimensions.1);
+            encoder.set_color(png::ColorType::RGBA);
+            encoder.set_depth(png::BitDepth::Eight);
+
+            let mut output_writer = encoder.write_header().unwrap();
+            output_writer.write_image_data(&result.bytes).unwrap();
+        }
+
+        Ok(vec![PathBuf::from("packed.png")])
     }
 
     fn sync_unpackable_image<S: UploadStrategy>(
@@ -515,6 +562,7 @@ fn generate_asset_hash(content: &[u8]) -> String {
 
 mod error {
     use crate::data::{ConfigError, ManifestError};
+    use png;
     use snafu::Snafu;
     use std::{io, path::PathBuf};
     use walkdir;
@@ -555,6 +603,18 @@ mod error {
         #[snafu(display("Path {} was described by more than one glob", path.display()))]
         OverlappingGlobs {
             path: PathBuf,
+        },
+
+        // TODO: Add more detail here and better display
+        #[snafu(display("{}", source))]
+        PngDecode {
+            source: png::DecodingError,
+        },
+
+        // TODO: Add more detail here and better display
+        #[snafu(display("{}", source))]
+        PngEncode {
+            source: png::EncodingError,
         },
     }
 }
