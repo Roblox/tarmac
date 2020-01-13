@@ -14,7 +14,7 @@ use walkdir::WalkDir;
 use crate::{
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
-    data::{CodegenKind, Config, InputManifest, Manifest},
+    data::{CodegenKind, Config, InputConfig, InputManifest, Manifest},
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
 };
@@ -84,7 +84,7 @@ struct SyncInput {
 
     /// An index into SyncSession::configs representing the config that applies
     /// to this input.
-    config_index: (usize, usize),
+    config: InputConfig,
 
     /// The content hash associated with the input, if we've calculated it.
     hash: Option<String>,
@@ -202,10 +202,10 @@ impl SyncSession {
 
         // Starting with our root config, iterate over all configs and find all
         // relevant inputs
-        for (config_index, config) in self.configs.iter().enumerate() {
+        for config in &self.configs {
             let config_path = config.folder();
 
-            for (input_config_index, input_config) in config.inputs.iter().enumerate() {
+            for input_config in &config.inputs {
                 let base_path = config_path.join(input_config.glob.get_prefix());
                 log::trace!(
                     "Searching for inputs in '{}' matching '{}'",
@@ -230,7 +230,7 @@ impl SyncSession {
                         name,
                         SyncInput {
                             path: matching.into_path(),
-                            config_index: (config_index, input_config_index),
+                            config: input_config.clone(),
                             hash: None,
                             id: None,
                         },
@@ -257,11 +257,8 @@ impl SyncSession {
         let mut compatible_input_groups = HashMap::new();
 
         for (input_name, input) in &self.inputs {
-            let config = &self.configs[input.config_index.0];
-            let input_config = &config.inputs[input.config_index.1];
-
             let compatibility = InputCompatibility {
-                packable: input_config.packable,
+                packable: input.config.packable,
             };
 
             let input_group = compatible_input_groups
@@ -327,11 +324,8 @@ impl SyncSession {
                 // The file's contents are the same as the previous sync and
                 // this image has been uploaded previously.
 
-                let config = &self.configs[input.config_index.0];
-                let input_config = &config.inputs[input.config_index.1];
-
-                if input_manifest.packable != input_config.packable
-                    || input_manifest.codegen != input_config.codegen
+                if input_manifest.packable != input.config.packable
+                    || input_manifest.codegen != input.config.codegen
                 {
                     // Only the file's config has changed.
                     //
@@ -377,17 +371,14 @@ impl SyncSession {
             .inputs
             .iter()
             .map(|(name, input)| {
-                let config = &self.configs[input.config_index.0];
-                let input_config = &config.inputs[input.config_index.1];
-
                 (
                     name.clone(),
                     InputManifest {
                         hash: input.hash.clone(),
                         id: input.id,
                         slice: None,
-                        packable: input_config.packable,
-                        codegen: input_config.codegen,
+                        packable: input.config.packable,
+                        codegen: input.config.codegen,
                     },
                 )
             })
@@ -404,16 +395,13 @@ impl SyncSession {
         log::trace!("Starting codegen");
 
         for (input_name, input) in &self.inputs {
-            let config = &self.configs[input.config_index.0];
-            let input_config = &config.inputs[input.config_index.1];
-
             log::trace!(
                 "Using codegen '{:?}' for {}",
-                input_config.codegen,
+                input.config.codegen,
                 input_name
             );
 
-            match input_config.codegen {
+            match input.config.codegen {
                 CodegenKind::None => {}
 
                 CodegenKind::AssetUrl => {
