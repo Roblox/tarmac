@@ -4,7 +4,6 @@ use std::{
     env, fmt,
     fs::{self, File},
     io::Write,
-    iter,
     path::{Path, PathBuf},
 };
 
@@ -63,12 +62,12 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
 /// command.
 #[derive(Debug)]
 struct SyncSession {
-    /// The config file pulled from the starting point of the sync operation.
-    root_config: Config,
-
-    /// Config files discovered by searching through the `includes` section of
-    /// known config files, recursively.
-    non_root_configs: Vec<Config>,
+    /// The set of all configs known by the sync session.
+    ///
+    /// This list is always at least one element long. The first entry is the
+    /// root config where the sync session was started; use
+    /// SyncSession::root_config to retrieve it.
+    configs: Vec<Config>,
 
     /// The manifest file that was present as of the beginning of the sync
     /// operation.
@@ -102,11 +101,15 @@ impl SyncSession {
         };
 
         Ok(Self {
-            root_config,
-            non_root_configs: Vec::new(),
+            configs: vec![root_config],
             original_manifest,
-            inputs: Default::default(),
+            inputs: HashMap::new(),
         })
+    }
+
+    /// The config that this sync session was started from.
+    fn root_config(&self) -> &Config {
+        &self.configs[0]
     }
 
     /// Locate all of the configs connected to our root config.
@@ -117,7 +120,7 @@ impl SyncSession {
     fn discover_configs(&mut self) -> Result<(), Error> {
         let mut to_search = VecDeque::new();
         to_search.extend(
-            self.root_config
+            self.root_config()
                 .includes
                 .iter()
                 .map(|include| include.path.clone()),
@@ -136,7 +139,7 @@ impl SyncSession {
                 // Include any configs that this config references.
                 to_search.extend(config.includes.iter().map(|include| include.path.clone()));
 
-                self.non_root_configs.push(config);
+                self.configs.push(config);
             } else {
                 // If this directory contains a config file, we can stop
                 // traversing this branch.
@@ -149,7 +152,7 @@ impl SyncSession {
                         to_search
                             .extend(config.includes.iter().map(|include| include.path.clone()));
 
-                        self.non_root_configs.push(config);
+                        self.configs.push(config);
                     }
 
                     Err(err) if err.is_not_found() => {
@@ -191,7 +194,7 @@ impl SyncSession {
 
         // Starting with our root config, iterate over all configs and find all
         // relevant inputs
-        for config in iter::once(&self.root_config).chain(self.non_root_configs.iter()) {
+        for config in &self.configs {
             let config_path = config.folder();
 
             for input_config in &config.inputs {
@@ -371,7 +374,7 @@ impl SyncSession {
             .collect();
 
         manifest
-            .write_to_folder(self.root_config.folder())
+            .write_to_folder(self.root_config().folder())
             .context(error::Manifest)?;
 
         Ok(())
