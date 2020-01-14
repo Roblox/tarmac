@@ -5,6 +5,7 @@ use std::{
     fs::{self, File},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
 use png;
@@ -19,7 +20,7 @@ use crate::{
     data::{CodegenKind, Config, InputConfig, InputManifest, Manifest},
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
-    spritesheet::{OutputFormat, PackOutput},
+    spritesheet::{OutputFormat, Spritesheet},
 };
 
 use self::error::Error;
@@ -297,68 +298,91 @@ impl SyncSession {
 
     fn pack_images(
         &self,
-        input_group: Vec<AssetName>,
-    ) -> Result<HashMap<PathBuf, PackOutput>, SyncError> {
+        mut input_group: Vec<AssetName>,
+    ) -> Result<HashMap<PathBuf, Spritesheet>, SyncError> {
         log::info!("Packing {} compatible images", input_group.len());
 
-        let mut packable_inputs = Vec::new();
-        for asset_name in input_group.iter() {
-            let path = self.inputs.get(asset_name).unwrap().path.as_path();
+        // First, sort the inputs to make sure they're' always processed in a
+        // consistent order. This makes sure we avoid generating different
+        // spritesheets with the same input sprites.
+        input_group.sort();
 
-            let image_file = fs::File::open(path).context(error::Io { path })?;
-            let decoder = png::Decoder::new(image_file);
+        let packable_inputs: Vec<InputSprite> = input_group
+            .iter()
+            .map(|asset_name| {
+                // Build a png decoder for the given file
+                let path = self.inputs.get(asset_name).unwrap().path.as_path();
+                let image_file = fs::File::open(path).context(error::Io { path })?;
+                let decoder = png::Decoder::new(image_file);
 
-            let (info, mut reader) = decoder.read_info().context(error::PngDecode)?;
-            let dimensions = (info.width, info.height);
+                // Get the metadata we need from the image and read its data
+                // into a buffer for processing by the sprite packing algorithm
+                let (info, mut reader) = decoder.read_info().context(error::PngDecode)?;
+                let dimensions = (info.width, info.height);
+                let mut bytes = vec![0; info.buffer_size()];
+                reader.next_frame(&mut bytes).context(error::PngDecode)?;
 
-            let mut bytes = vec![0; info.buffer_size()];
-            reader.next_frame(&mut bytes).context(error::PngDecode)?;
+                log::trace!(
+                    "Processing input {}\n\tDimensions: ({}, {})\n\tBitDepth: {:?}\n\tColorType: {:?}\n\tBytes: {}",
+                    path.display(),
+                    dimensions.0,
+                    dimensions.1,
+                    info.bit_depth,
+                    info.color_type,
+                    bytes.len()
+                );
 
-            log::trace!(
-                "Input: {}\n\tDimensions: ({}, {})\n\tBitDepth: {:?}\n\tColorType: {:?}\n\tBytes: {}",
-                path.file_name().unwrap().to_str().unwrap(),
-                dimensions.0,
-                dimensions.1,
-                info.bit_depth,
-                info.color_type,
-                bytes.len()
-            );
+                // The packing algorithm expects to have an alpha channel, so
+                // non-RGBA images are unsupported
+                // TODO: Transcode images to RGBA if/when possible
+                if info.color_type != png::ColorType::RGBA {
+                    return Err(SyncError::UnsupportedFormat { path: path.to_path_buf(), format: info.color_type });
+                }
 
-            packable_inputs.push(InputSprite { bytes, dimensions })
-        }
+                Ok(InputSprite { bytes, dimensions })
+            })
+            .collect::<Result<_, SyncError>>()?;
 
+        // The Maxrects sprite packing algorithm accepts options for the max
+        // width and height of the generated spritesheets
         let dimensions = self.root_config().max_spritesheet_size;
         let opts = MaxrectsOptions::default()
             .max_width(dimensions.0)
             .max_height(dimensions.1);
 
+        // Pack all inputs into one or more spritesheet buckets
         let pack_results = sheep::pack::<MaxrectsPacker>(packable_inputs, 4, opts);
-        let mut outputs = HashMap::new();
 
-        for result in pack_results.into_iter() {
-            // FIXME: Ridiculous cloning of AssetName vec
-            let output_meta = sheep::encode::<OutputFormat>(&result, input_group.clone());
-            let hash = generate_asset_hash(&result.bytes);
+        pack_results
+            .into_iter()
+            .map(|result| {
+                let hash = generate_asset_hash(&result.bytes);
+                let spritesheet = sheep::encode::<OutputFormat>(&result, input_group.clone());
 
-            let path = PathBuf::from(format!("{}.png", hash));
-            let output_file = fs::File::create(&path).unwrap();
-            let writer = BufWriter::new(output_file);
+                // Generate the path and BufWriter for spritesheet's output png
+                let path = PathBuf::from(format!("{}.png", hash));
+                let output_file = fs::File::create(&path).context(error::Io { path: &path })?;
+                let writer = BufWriter::new(output_file);
 
-            let mut encoder = png::Encoder::new(writer, result.dimensions.0, result.dimensions.1);
-            encoder.set_color(png::ColorType::RGBA);
-            encoder.set_depth(png::BitDepth::Eight);
+                // Write out the spritesheet data in rgba8
+                let mut encoder =
+                    png::Encoder::new(writer, result.dimensions.0, result.dimensions.1);
+                encoder.set_color(png::ColorType::RGBA);
+                encoder.set_depth(png::BitDepth::Eight);
+                let mut output_writer = encoder.write_header().context(error::PngEncode)?;
+                output_writer
+                    .write_image_data(&result.bytes)
+                    .context(error::PngEncode)?;
 
-            let mut output_writer = encoder.write_header().unwrap();
-            output_writer.write_image_data(&result.bytes).unwrap();
+                log::trace!(
+                    "Generated spritesheet {}:\n{:#?}",
+                    path.display(),
+                    spritesheet
+                );
 
-            outputs.insert(path, output_meta);
-        }
-
-        for (path, output) in outputs.iter() {
-            log::trace!("{}: {:#?}", path.display(), output);
-        }
-
-        Ok(outputs)
+                Ok((path, spritesheet))
+            })
+            .collect()
     }
 
     fn sync_unpackable_image<S: UploadStrategy>(
@@ -625,6 +649,16 @@ mod error {
         #[snafu(display("Path {} was described by more than one glob", path.display()))]
         OverlappingGlobs {
             path: PathBuf,
+        },
+
+        #[snafu(display(
+            "Input {} has unsupported png format {:?} (requires RGBA format)",
+            path.display(),
+            format,
+        ))]
+        UnsupportedFormat {
+            path: PathBuf,
+            format: png::ColorType,
         },
 
         // TODO: Add more detail here and better display

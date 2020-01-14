@@ -1,17 +1,37 @@
 use crate::{asset_name::AssetName, data::ImageSlice};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 use sheep::{Format, SpriteAnchor};
 
-#[derive(Debug)]
-pub struct PackOutput {
+pub struct Spritesheet {
     dimensions: (u32, u32),
     slices: HashMap<AssetName, ImageSlice>,
 }
 
-impl PackOutput {
+impl Spritesheet {
     pub fn get_image_slice(&self, name: &AssetName) -> Option<&ImageSlice> {
         self.slices.get(name)
+    }
+}
+
+impl fmt::Debug for Spritesheet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut lines = String::new();
+        self.slices.iter().for_each(|(name, slice)| {
+            lines.push_str(
+                format!(
+                    "\t{}: ({}, {}) ({}, {})\n",
+                    name, slice.min.0, slice.min.1, slice.max.0, slice.max.1
+                )
+                .as_str(),
+            );
+        });
+
+        write!(
+            f,
+            "Dimensions: ({}, {})\nInputs:\n{}",
+            self.dimensions.0, self.dimensions.1, lines
+        )
     }
 }
 
@@ -30,7 +50,7 @@ impl From<&SpriteAnchor> for ImageSlice {
 pub struct OutputFormat;
 
 impl Format for OutputFormat {
-    type Data = PackOutput;
+    type Data = Spritesheet;
     // FIXME: Quite a bit of cloning here, might end up wanting to box this I
     // guess?
     type Options = Vec<AssetName>;
@@ -45,6 +65,6 @@ impl Format for OutputFormat {
             .map(|anchor| (options[anchor.id].clone(), ImageSlice::from(anchor)))
             .collect();
 
-        PackOutput { dimensions, slices }
+        Spritesheet { dimensions, slices }
     }
 }
