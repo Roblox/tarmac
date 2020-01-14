@@ -9,7 +9,7 @@ use std::{
 
 use png;
 use sha2::{Digest, Sha256};
-use sheep::{self, Format, InputSprite, SimplePacker};
+use sheep::{self, Format, InputSprite, MaxrectsOptions, MaxrectsPacker};
 use snafu::ResultExt;
 use walkdir::WalkDir;
 
@@ -295,7 +295,10 @@ impl SyncSession {
         Ok(())
     }
 
-    fn pack_images(&self, input_group: Vec<AssetName>) -> Result<Vec<PackOutput>, SyncError> {
+    fn pack_images(
+        &self,
+        input_group: Vec<AssetName>,
+    ) -> Result<HashMap<PathBuf, PackOutput>, SyncError> {
         log::info!("Packing {} compatible images", input_group.len());
 
         let mut packable_inputs = Vec::new();
@@ -324,12 +327,17 @@ impl SyncSession {
             packable_inputs.push(InputSprite { bytes, dimensions })
         }
 
-        let pack_results = sheep::pack::<SimplePacker>(packable_inputs, 4, ());
-        let mut outputs = Vec::new();
+        let dimensions = self.root_config().max_spritesheet_size;
+        let opts = MaxrectsOptions::default()
+            .max_width(dimensions.0)
+            .max_height(dimensions.1);
+
+        let pack_results = sheep::pack::<MaxrectsPacker>(packable_inputs, 4, opts);
+        let mut outputs = HashMap::new();
 
         for result in pack_results.into_iter() {
             // FIXME: Ridiculous cloning of AssetName vec
-            let format = sheep::encode::<OutputFormat>(&result, input_group.clone());
+            let output_meta = sheep::encode::<OutputFormat>(&result, input_group.clone());
             let hash = generate_asset_hash(&result.bytes);
 
             let path = PathBuf::from(format!("{}.png", hash));
@@ -343,7 +351,11 @@ impl SyncSession {
             let mut output_writer = encoder.write_header().unwrap();
             output_writer.write_image_data(&result.bytes).unwrap();
 
-            // outputs.push(PackOutput { path, slices });
+            outputs.insert(path, output_meta);
+        }
+
+        for (path, output) in outputs.iter() {
+            log::trace!("{}: {:#?}", path.display(), output);
         }
 
         Ok(outputs)

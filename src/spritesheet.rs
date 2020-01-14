@@ -3,10 +3,16 @@ use std::collections::HashMap;
 
 use sheep::{Format, SpriteAnchor};
 
+#[derive(Debug)]
 pub struct PackOutput {
-    // path: PathBuf,
     dimensions: (u32, u32),
     slices: HashMap<AssetName, ImageSlice>,
+}
+
+impl PackOutput {
+    pub fn get_image_slice(&self, name: &AssetName) -> Option<&ImageSlice> {
+        self.slices.get(name)
+    }
 }
 
 impl From<&SpriteAnchor> for ImageSlice {
@@ -25,13 +31,14 @@ pub struct OutputFormat;
 
 impl Format for OutputFormat {
     type Data = PackOutput;
-    // FIXME: Ridiculous cloning
+    // FIXME: Quite a bit of cloning here, might end up wanting to box this I
+    // guess?
     type Options = Vec<AssetName>;
 
     fn encode(
         dimensions: (u32, u32),
         sprites: &[SpriteAnchor],
-        mut options: Self::Options,
+        options: Self::Options,
     ) -> Self::Data {
         let slices = sprites
             .iter()

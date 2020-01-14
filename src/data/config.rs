@@ -23,7 +23,7 @@ pub struct Config {
     /// The maximum size that any packed spritesheets should be. Only applies if
     /// this config is the root config file.
     #[serde(default = "default_max_spritesheet_size")]
-    pub max_spritesheet_size: (usize, usize),
+    pub max_spritesheet_size: (u32, u32),
 
     /// A list of other Tarmac config files that should be owned by this one.
     #[serde(default)]
@@ -74,7 +74,7 @@ impl Config {
     }
 }
 
-fn default_max_spritesheet_size() -> (usize, usize) {
+fn default_max_spritesheet_size() -> (u32, u32) {
     (1024, 1024)
 }
 
