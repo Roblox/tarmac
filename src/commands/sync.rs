@@ -5,19 +5,18 @@ use std::{
     fs::{self, File},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
-    rc::Rc,
 };
 
 use png;
 use sha2::{Digest, Sha256};
-use sheep::{self, Format, InputSprite, MaxrectsOptions, MaxrectsPacker};
+use sheep::{self, InputSprite, MaxrectsOptions, MaxrectsPacker};
 use snafu::ResultExt;
 use walkdir::WalkDir;
 
 use crate::{
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
-    data::{CodegenKind, Config, InputConfig, InputManifest, Manifest},
+    data::{CodegenKind, Config, ImageSlice, InputConfig, InputManifest, Manifest},
     dpi_scale::dpi_scale_for_path,
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
@@ -96,6 +95,19 @@ struct SyncInput {
 
     /// The asset ID of this input the last time it was uploaded.
     id: Option<u64>,
+
+    /// If the asset is an image that was packed into a spritesheet, contains
+    /// the portion of the uploaded image that contains this input.
+    slice: Option<ImageSlice>,
+}
+
+impl SyncInput {
+    pub fn matches_manifest(&self, manifest: &InputManifest) -> bool {
+        self.hash.is_some()
+            && self.hash == manifest.hash
+            && self.config.packable == manifest.packable
+            && self.config.codegen == manifest.codegen
+    }
 }
 
 impl SyncSession {
@@ -238,6 +250,7 @@ impl SyncSession {
                             config: input_config.clone(),
                             hash: None,
                             id: None,
+                            slice: None,
                         },
                     );
 
@@ -278,6 +291,10 @@ impl SyncSession {
         for (compatibility, group) in compatible_input_groups {
             if compatibility.packable {
                 let packed = self.pack_images(group)?;
+
+                for (path, spritesheet) in packed.iter() {
+                    self.sync_packed_image(strategy, path, spritesheet)?;
+                }
             } else {
                 for input_name in group {
                     let input = self.inputs.get(&input_name).unwrap();
@@ -300,7 +317,7 @@ impl SyncSession {
     }
 
     fn pack_images(
-        &self,
+        &mut self,
         mut input_group: Vec<AssetName>,
     ) -> Result<HashMap<PathBuf, Spritesheet>, SyncError> {
         log::info!("Packing {} compatible images", input_group.len());
@@ -309,6 +326,30 @@ impl SyncSession {
         // consistent order. This makes sure we avoid generating different
         // spritesheets with the same input sprites.
         input_group.sort();
+
+        // For each asset in this group, compute the hash of its content; we can
+        // use this to verify whether or not any of the images have changed
+        let mut unchanged = true;
+        for asset_name in input_group.iter() {
+            let input = self.inputs.get_mut(asset_name).unwrap();
+            let path = input.path.as_path();
+            let contents = fs::read(path).context(error::Io { path })?;
+
+            input.hash = Some(generate_asset_hash(contents.as_ref()));
+
+            // Once the hash is computed, compare with the manifest's has to
+            // determine if we have any changed inputs
+            let from_manifest = self.original_manifest.inputs.get(asset_name);
+            unchanged &= from_manifest
+                .map(|manifest_input| input.matches_manifest(manifest_input))
+                .unwrap_or(false)
+        }
+
+        // If none of the input images have changed, we can short-circuit here
+        if unchanged {
+            log::info!("All input images are unchanged; no need to pack spritesheets");
+            return Ok(HashMap::new());
+        }
 
         let packable_inputs: Vec<InputSprite> = input_group
             .iter()
@@ -356,6 +397,8 @@ impl SyncSession {
         // Pack all inputs into one or more spritesheet buckets
         let pack_results = sheep::pack::<MaxrectsPacker>(packable_inputs, 4, opts);
 
+        log::info!("Generated {} spritesheets", pack_results.len());
+
         pack_results
             .into_iter()
             .map(|result| {
@@ -366,6 +409,10 @@ impl SyncSession {
                 let path = PathBuf::from(format!("{}.png", hash));
                 let output_file = fs::File::create(&path).context(error::Io { path: &path })?;
                 let writer = BufWriter::new(output_file);
+
+                // TODO: Tarmac currently generates spritesheets wherever it's
+                // run from and does not clean them up; we should either put
+                // them somewhere consistent, or delete them after we're done
 
                 // Write out the spritesheet data in rgba8
                 let mut encoder =
@@ -454,6 +501,17 @@ impl SyncSession {
         };
 
         input.id = Some(id);
+
+        Ok(())
+    }
+
+    fn sync_packed_image<S: UploadStrategy>(
+        &mut self,
+        strategy: &mut S,
+        path: &Path,
+        packed_image: &Spritesheet,
+    ) -> Result<(), Error> {
+        // TODO: Sync spritesheet image if necessary
 
         Ok(())
     }

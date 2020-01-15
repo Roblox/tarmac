@@ -9,8 +9,8 @@ pub struct Spritesheet {
 }
 
 impl Spritesheet {
-    pub fn get_image_slice(&self, name: &AssetName) -> Option<&ImageSlice> {
-        self.slices.get(name)
+    pub fn slices(&self) -> impl Iterator<Item = (&AssetName, &ImageSlice)> {
+        self.slices.iter()
     }
 }
 
