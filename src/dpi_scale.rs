@@ -10,7 +10,7 @@ use regex::Regex;
 /// - foo@1x.png (1x)
 /// - foo@2x.png (2x)
 /// - foo@3x.png (3x)
-fn dpi_scale_for_path<P: AsRef<Path>>(path: P) -> u32 {
+pub(crate) fn dpi_scale_for_path<P: AsRef<Path>>(path: P) -> u32 {
     lazy_static::lazy_static! {
         static ref DPI_PATTERN: Regex = Regex::new(r"@(\d+)x\..+?$").unwrap();
     }

@@ -18,6 +18,7 @@ use crate::{
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
     data::{CodegenKind, Config, InputConfig, InputManifest, Manifest},
+    dpi_scale::dpi_scale_for_path,
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
     spritesheet::{OutputFormat, Spritesheet},
@@ -256,6 +257,7 @@ impl SyncSession {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         struct InputCompatibility {
             packable: bool,
+            dpi_scale: u32,
         }
 
         let mut compatible_input_groups = HashMap::new();
@@ -263,6 +265,7 @@ impl SyncSession {
         for (input_name, input) in &self.inputs {
             let compatibility = InputCompatibility {
                 packable: input.config.packable,
+                dpi_scale: dpi_scale_for_path(&input.path),
             };
 
             let input_group = compatible_input_groups
