@@ -1,5 +1,6 @@
 mod asset_name;
 mod auth_cookie;
+mod codegen;
 mod commands;
 mod data;
 mod dpi_scale;
