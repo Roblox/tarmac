@@ -290,9 +290,9 @@ impl SyncSession {
 
         for (compatibility, group) in compatible_input_groups {
             if compatibility.packable {
-                let packed = self.pack_images(group)?;
+                let spritesheets = self.pack_images(group)?;
 
-                for (path, spritesheet) in packed.iter() {
+                for (path, spritesheet) in spritesheets.iter() {
                     self.sync_packed_image(strategy, path, spritesheet)?;
                 }
             } else {
@@ -337,12 +337,20 @@ impl SyncSession {
 
             input.hash = Some(generate_asset_hash(contents.as_ref()));
 
-            // Once the hash is computed, compare with the manifest's has to
+            // Once the hash is computed, compare with the manifest's hash to
             // determine if we have any changed inputs
-            let from_manifest = self.original_manifest.inputs.get(asset_name);
-            unchanged &= from_manifest
-                .map(|manifest_input| input.matches_manifest(manifest_input))
-                .unwrap_or(false)
+            let input_manifest = self.original_manifest.inputs.get(asset_name);
+            let matches_manifest = input_manifest
+                .map(|manifest| input.matches_manifest(manifest))
+                .unwrap_or(false);
+
+            // If the input in question has an id and matches the input
+            // manifest, then we may not need to spritesheet it
+            unchanged &= input.id.is_some() && matches_manifest;
+
+            // TODO: Make sure this aligns with the content folder upload
+            // strategy; particularly, when we may not have uploaded but have
+            // already generated a spritesheet and put it somewhere
         }
 
         // If none of the input images have changed, we can short-circuit here
@@ -511,7 +519,50 @@ impl SyncSession {
         path: &Path,
         packed_image: &Spritesheet,
     ) -> Result<(), Error> {
-        // TODO: Sync spritesheet image if necessary
+        let mut slices = packed_image.slices();
+        let (first_asset, _) = slices.next().unwrap();
+        let first_input = self.inputs.get(first_asset).unwrap();
+
+        // If there's an existing id that lines up with all of the inputs in the
+        // spritesheet, we don't need to upload and we can short-circuit
+        let existing_id = first_input.id.and_then(|id| {
+            for (asset_name, _) in slices {
+                let input = self.inputs.get(asset_name).unwrap();
+                if input.id != Some(id) {
+                    return None;
+                }
+            }
+
+            Some(id)
+        });
+
+        if let Some(id) = existing_id {
+            log::info!("Asset id {} has already been uploaded", id);
+            return Ok(());
+        }
+
+        // TODO: Do we need to save the hash of entire spritesheet contents so
+        // we can avoid re-uploading an identical spritesheet? Or can we get by
+        // with the above check?
+
+        let contents = fs::read(path).context(error::Io { path })?;
+        let hash = generate_asset_hash(contents.as_ref());
+
+        let upload_data = UploadData {
+            name: AssetName::spritesheet(),
+            contents,
+            hash: hash.clone(),
+        };
+
+        let id = strategy.upload(upload_data)?.id;
+
+        // Apply resolved metadata back to the inputs
+        for (asset_name, slice) in packed_image.slices() {
+            let input = self.inputs.get_mut(asset_name).unwrap();
+
+            input.id = Some(id);
+            input.slice = Some(slice.to_owned());
+        }
 
         Ok(())
     }
@@ -530,7 +581,7 @@ impl SyncSession {
                     InputManifest {
                         hash: input.hash.clone(),
                         id: input.id,
-                        slice: None,
+                        slice: input.slice.clone(),
                         packable: input.config.packable,
                         codegen: input.config.codegen,
                     },
