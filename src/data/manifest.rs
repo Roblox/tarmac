@@ -66,9 +66,25 @@ pub struct InputManifest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct ImageSlice {
-    pub min: (u32, u32),
-    pub max: (u32, u32),
+    coordinates: ((u32, u32), (u32, u32)),
+}
+
+impl ImageSlice {
+    pub fn new(min: (u32, u32), max: (u32, u32)) -> Self {
+        Self {
+            coordinates: (min, max),
+        }
+    }
+
+    pub fn min(&self) -> (u32, u32) {
+        self.coordinates.0
+    }
+
+    pub fn max(&self) -> (u32, u32) {
+        self.coordinates.1
+    }
 }
 
 #[derive(Debug, Snafu)]

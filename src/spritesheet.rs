@@ -18,13 +18,7 @@ impl fmt::Debug for Spritesheet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut lines = String::new();
         self.slices.iter().for_each(|(name, slice)| {
-            lines.push_str(
-                format!(
-                    "\t{}: ({}, {}) ({}, {})\n",
-                    name, slice.min.0, slice.min.1, slice.max.0, slice.max.1
-                )
-                .as_str(),
-            );
+            lines.push_str(format!("\t{}: {:?} {:?}\n", name, slice.min(), slice.max()).as_str());
         });
 
         write!(
@@ -37,13 +31,13 @@ impl fmt::Debug for Spritesheet {
 
 impl From<&SpriteAnchor> for ImageSlice {
     fn from(anchor: &SpriteAnchor) -> ImageSlice {
-        ImageSlice {
-            min: (anchor.position.0, anchor.position.1),
-            max: (
+        ImageSlice::new(
+            (anchor.position.0, anchor.position.1),
+            (
                 anchor.position.0 + anchor.dimensions.0,
                 anchor.position.1 + anchor.dimensions.1,
             ),
-        }
+        )
     }
 }
 
