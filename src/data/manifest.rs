@@ -65,7 +65,7 @@ pub struct InputManifest {
     pub codegen: CodegenKind,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ImageSlice {
     coordinates: ((u32, u32), (u32, u32)),
@@ -84,6 +84,13 @@ impl ImageSlice {
 
     pub fn max(&self) -> (u32, u32) {
         self.coordinates.1
+    }
+
+    pub fn size(&self) -> (u32, u32) {
+        let (x1, y1) = self.min();
+        let (x2, y2) = self.max();
+
+        (x2 - x1, y2 - y1)
     }
 }
 

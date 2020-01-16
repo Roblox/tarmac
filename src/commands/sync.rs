@@ -16,7 +16,7 @@ use walkdir::WalkDir;
 use crate::{
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
-    codegen::AssetUrlTemplate,
+    codegen::{AssetUrlTemplate, UrlAndSliceTemplate},
     data::{CodegenKind, Config, ImageSlice, InputConfig, InputManifest, Manifest},
     dpi_scale::dpi_scale_for_path,
     options::{GlobalOptions, SyncOptions, SyncTarget},
@@ -612,12 +612,11 @@ impl SyncSession {
 
                 CodegenKind::AssetUrl => {
                     if let Some(id) = input.id {
+                        let template = AssetUrlTemplate { id };
+
                         let path = &input.path.with_extension("lua");
-
                         let mut file = File::create(path).context(error::Io { path })?;
-
-                        write!(&mut file, "{}", AssetUrlTemplate { id })
-                            .context(error::Io { path })?;
+                        write!(&mut file, "{}", template).context(error::Io { path })?;
 
                         log::trace!("Generated code at {}", path.display());
                     } else {
@@ -626,7 +625,20 @@ impl SyncSession {
                 }
 
                 CodegenKind::UrlAndSlice => {
-                    log::warn!("TODO: Implement url-and-slice codegen kind");
+                    if let Some(id) = input.id {
+                        let template = UrlAndSliceTemplate {
+                            id,
+                            slice: input.slice,
+                        };
+
+                        let path = &input.path.with_extension("lua");
+                        let mut file = File::create(path).context(error::Io { path })?;
+                        write!(&mut file, "{}", template).context(error::Io { path })?;
+
+                        log::trace!("Generated code at {}", path.display());
+                    } else {
+                        log::trace!("Skipping codegen because this input was not uploaded.");
+                    }
                 }
             }
         }
