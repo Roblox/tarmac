@@ -582,7 +582,7 @@ impl SyncSession {
                     InputManifest {
                         hash: input.hash.clone(),
                         id: input.id,
-                        slice: input.slice.clone(),
+                        slice: input.slice,
                         packable: input.config.packable,
                         codegen: input.config.codegen,
                     },
