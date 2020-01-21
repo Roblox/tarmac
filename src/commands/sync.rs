@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, VecDeque},
     env,
     fs::{self, File},
-    io::{BufWriter, Write},
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -293,8 +293,8 @@ impl SyncSession {
             if compatibility.packable {
                 let spritesheets = self.pack_images(group)?;
 
-                for (path, spritesheet) in spritesheets.iter() {
-                    self.sync_packed_image(strategy, path, spritesheet)?;
+                for (contents, spritesheet) in spritesheets {
+                    self.sync_packed_image(strategy, contents, &spritesheet)?;
                 }
             } else {
                 for input_name in group {
@@ -320,7 +320,7 @@ impl SyncSession {
     fn pack_images(
         &mut self,
         mut input_group: Vec<AssetName>,
-    ) -> Result<HashMap<PathBuf, Spritesheet>, SyncError> {
+    ) -> Result<Vec<(Vec<u8>, Spritesheet)>, SyncError> {
         log::info!("Packing {} compatible images", input_group.len());
 
         // First, sort the inputs to make sure they're' always processed in a
@@ -357,7 +357,7 @@ impl SyncSession {
         // If none of the input images have changed, we can short-circuit here
         if unchanged {
             log::info!("All input images are unchanged; no need to pack spritesheets");
-            return Ok(HashMap::new());
+            return Ok(Vec::new());
         }
 
         let packable_inputs: Vec<InputSprite> = input_group
@@ -411,35 +411,31 @@ impl SyncSession {
         pack_results
             .into_iter()
             .map(|result| {
-                let hash = generate_asset_hash(&result.bytes);
                 let spritesheet = sheep::encode::<OutputFormat>(&result, input_group.clone());
 
-                // Generate the path and BufWriter for spritesheet's output png
-                let path = PathBuf::from(format!("{}.png", hash));
-                let output_file = fs::File::create(&path).context(error::Io { path: &path })?;
-                let writer = BufWriter::new(output_file);
+                let mut contents = Vec::new();
 
-                // TODO: Tarmac currently generates spritesheets wherever it's
-                // run from and does not clean them up; we should either put
-                // them somewhere consistent, or delete them after we're done
-
-                // Write out the spritesheet data in rgba8
                 let mut encoder =
-                    png::Encoder::new(writer, result.dimensions.0, result.dimensions.1);
+                    png::Encoder::new(&mut contents, result.dimensions.0, result.dimensions.1);
+
                 encoder.set_color(png::ColorType::RGBA);
                 encoder.set_depth(png::BitDepth::Eight);
-                let mut output_writer = encoder.write_header().context(error::PngEncode)?;
-                output_writer
-                    .write_image_data(&result.bytes)
-                    .context(error::PngEncode)?;
 
-                log::trace!(
-                    "Generated spritesheet {}:\n{:#?}",
-                    path.display(),
-                    spritesheet
-                );
+                // Write out RGBA8 image data
+                {
+                    let mut output_writer = encoder.write_header().context(error::PngEncode)?;
 
-                Ok((path, spritesheet))
+                    output_writer
+                        .write_image_data(&result.bytes)
+                        .context(error::PngEncode)?;
+
+                    // On drop, output_writer will write the last chunk of the
+                    // PNG file.
+                }
+
+                log::trace!("Generated spritesheet:\n{:#?}", spritesheet);
+
+                Ok((contents, spritesheet))
             })
             .collect()
     }
@@ -517,7 +513,7 @@ impl SyncSession {
     fn sync_packed_image<S: UploadStrategy>(
         &mut self,
         strategy: &mut S,
-        path: &Path,
+        contents: Vec<u8>,
         packed_image: &Spritesheet,
     ) -> Result<(), Error> {
         let mut slices = packed_image.slices();
@@ -546,7 +542,6 @@ impl SyncSession {
         // we can avoid re-uploading an identical spritesheet? Or can we get by
         // with the above check?
 
-        let contents = fs::read(path).context(error::Io { path })?;
         let hash = generate_asset_hash(contents.as_ref());
 
         let upload_data = UploadData {

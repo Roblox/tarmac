@@ -1,7 +1,8 @@
-use crate::{asset_name::AssetName, data::ImageSlice};
 use std::{collections::HashMap, fmt};
 
 use sheep::{Format, SpriteAnchor};
+
+use crate::{asset_name::AssetName, data::ImageSlice};
 
 pub struct Spritesheet {
     dimensions: (u32, u32),
