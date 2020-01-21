@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{borrow::Cow, fmt, fs, path::Path};
 
 use reqwest::{
     header::{HeaderValue, COOKIE},
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct ImageUploadData<'a> {
-    pub image_data: Vec<u8>,
+    pub image_data: Cow<'a, [u8]>,
     pub name: &'a str,
     pub description: &'a str,
 }
@@ -28,6 +28,12 @@ pub struct RobloxApiClient {
     client: Client,
 }
 
+impl fmt::Debug for RobloxApiClient {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "<RobloxApiClient>")
+    }
+}
+
 impl RobloxApiClient {
     pub fn new(auth_token: String) -> Self {
         Self {
@@ -44,7 +50,7 @@ impl RobloxApiClient {
             client
                 .post(url)
                 .query(&[("name", data.name), ("description", data.description)])
-                .body(data.image_data.clone())
+                .body(data.image_data.clone().into_owned())
                 .build()
         })?;
 

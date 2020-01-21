@@ -1,0 +1,5 @@
+[inputs."assets/logo.png"]
+hash = "64788a7c49ed6c147c747cfa07df478e8ac1fea1c7b682457631328e7534d114"
+id = 4597138422
+packable = false
+codegen = "asset-url"

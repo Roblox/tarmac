@@ -1,6 +1,7 @@
 use std::{
     fmt,
     path::{self, Path},
+    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
@@ -13,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// APIs.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct AssetName(String);
+pub struct AssetName(Arc<str>);
 
 impl AssetName {
     pub fn from_paths(root_path: &Path, asset_path: &Path) -> Self {
@@ -31,7 +32,19 @@ impl AssetName {
             displayed.replace(path::MAIN_SEPARATOR, "/")
         };
 
-        AssetName(displayed)
+        AssetName(displayed.into())
+    }
+
+    /// Spritesheets don't have any canonical name provided by Tarmac's inputs;
+    /// when we upload them, we want to give them a simple dummy name
+    pub fn spritesheet() -> Self {
+        AssetName("spritesheet".into())
+    }
+}
+
+impl AsRef<str> for AssetName {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 

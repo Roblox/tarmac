@@ -1,9 +1,13 @@
 mod asset_name;
 mod auth_cookie;
+mod codegen;
 mod commands;
 mod data;
+mod dpi_scale;
+mod glob;
 mod options;
 mod roblox_web_api;
+mod spritesheet;
 
 use std::{error::Error, process};
 
