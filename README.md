@@ -4,7 +4,12 @@ Tarmac is a tool that manages assets for Roblox projects on the command line. It
 Tarmac is inspired by projects like [Webpack](https://webpack.js.org/) that allow you to import assets as if they're code.
 
 ## Installation
-Tarmac requires Rust 1.37+.
+
+### Windows and macOS
+Pre-built binaries are available for Windows and macOS from the [GitHub releases page](https://github.com/rojo-rbx/tarmac/releases).
+
+### From Crates.io
+Tarmac requires Rust 1.37+ to build.
 
 ```bash
 cargo install tarmac
