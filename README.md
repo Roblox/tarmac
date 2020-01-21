@@ -1,4 +1,18 @@
-# Tarmac
+<div align="center">
+    <h1>Tarmac</h1>
+</div>
+
+<div align="center">
+    <a href="https://github.com/rojo-rbx/tarmac/actions">
+        <img src="https://github.com/rojo-rbx/tarmac/workflows/CI/badge.svg" alt="GitHub Actions status" />
+    </a>
+    <a href="https://crates.io/crates/tarmac">
+        <img src="https://img.shields.io/crates/v/tarmac.svg?label=latest%20release" alt="Latest release" />
+    </a>
+</div>
+
+<hr />
+
 Tarmac is a tool that manages assets for Roblox projects on the command line. It paves the way for hermetic place builds when used with tools like [Rojo](https://github.com/rojo-rbx/rojo).
 
 Tarmac is inspired by projects like [Webpack](https://webpack.js.org/) that allow you to import assets as if they're code.
