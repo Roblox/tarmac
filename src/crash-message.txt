@@ -1,0 +1,9 @@
+Tarmac crashed. We consider this a bug!
+
+Please consider filing an issue on GitHub:
+https://github.com/rojo-rbx/tarmac/issues
+
+If you're able to reproduce this crash, try adding the -v, -vv, or -vvv flags.
+This might give you more information to figure out what went wrong!
+
+Details: {}

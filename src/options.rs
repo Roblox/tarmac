@@ -17,8 +17,12 @@ pub struct GlobalOptions {
     /// The authentication cookie for Tarmac to use. If not specified, Tarmac
     /// will attempt to use the cookie from the Roblox Studio installation on
     /// the system.
-    #[structopt(long)]
+    #[structopt(long, global(true))]
     pub auth: Option<String>,
+
+    /// Sets verbosity level. Can be specified multiple times.
+    #[structopt(long = "verbose", short, global(true), parse(from_occurrences))]
+    pub verbosity: u8,
 }
 
 #[derive(Debug, StructOpt)]
