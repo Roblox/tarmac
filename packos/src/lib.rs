@@ -22,8 +22,7 @@ impl InputRect {
 #[derive(Debug, Clone, Copy)]
 pub struct OutputRect {
     id: Id,
-    size: (u32, u32),
-    pos: (u32, u32),
+    aabb: Aabb,
 }
 
 pub struct PackResult {
@@ -49,10 +48,9 @@ impl SimplePacker {
     }
 
     pub fn pack<I: IntoIterator<Item = InputRect>>(&self, items: I) -> PackResult {
-        let mut items: Vec<_> = items.into_iter().collect();
-        items.sort_by_key(InputRect::area);
+        let mut remaining_items: Vec<_> = items.into_iter().collect();
+        remaining_items.sort_by_key(InputRect::area);
 
-        let mut remaining_items = items.as_slice();
         let mut buckets = Vec::new();
 
         while !remaining_items.is_empty() {
@@ -61,7 +59,8 @@ impl SimplePacker {
             let mut current_size = self.min_size;
 
             loop {
-                let (bucket, next_remaining) = Self::pack_one_bucket(remaining_items, current_size);
+                let (bucket, next_remaining) =
+                    Self::pack_one_bucket(&remaining_items, current_size);
 
                 // If this size was large enough to contain the rest of the
                 // images, we're done packing!
@@ -92,7 +91,49 @@ impl SimplePacker {
         PackResult { buckets }
     }
 
-    fn pack_one_bucket(sorted_items: &[InputRect], size: (u32, u32)) -> (PackBucket, &[InputRect]) {
-        unimplemented!()
+    fn pack_one_bucket(
+        sorted_items: &[InputRect],
+        size: (u32, u32),
+    ) -> (PackBucket, Vec<InputRect>) {
+        let mut anchors = vec![(0, 0)];
+        let mut items = Vec::new();
+        let mut unpacked_items = Vec::new();
+
+        for item in sorted_items {
+            unpacked_items.push(*item);
+        }
+
+        let bucket = PackBucket { size, items };
+
+        (bucket, unpacked_items)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Aabb {
+    pos: (u32, u32),
+    size: (u32, u32),
+}
+
+impl Aabb {
+    fn intersects(&self, other: &Aabb) -> bool {
+        let a_center = (
+            (self.pos.0 + self.size.0) as i32,
+            (self.pos.1 + self.size.1) as i32,
+        );
+        let b_center = (
+            (other.pos.0 + other.size.0) as i32,
+            (other.pos.1 + other.size.1) as i32,
+        );
+
+        let size_avg = (
+            (self.size.0 + other.size.0) as i32 / 2,
+            (self.size.1 + other.size.1) as i32 / 2,
+        );
+
+        let x_overlap = (b_center.0 - a_center.0).abs() <= size_avg.0;
+        let y_overlap = (b_center.1 - a_center.1).abs() <= size_avg.1;
+
+        x_overlap && y_overlap
     }
 }
