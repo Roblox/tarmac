@@ -12,6 +12,17 @@ homepage = "https://github.com/rojo-rbx/tarmac"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[workspace]
+members = [
+	".",
+	"packos",
+]
+
+default-members = [
+	".",
+	"packos",
+]
+
 [dependencies]
 env_logger = "0.7.0"
 globset = "0.4.4"
