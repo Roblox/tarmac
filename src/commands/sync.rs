@@ -55,6 +55,10 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
 
             session.sync(&mut strategy)?;
         }
+        SyncTarget::Debug => {
+            let mut strategy = DebugUploadStrategy;
+            session.sync(&mut strategy)?;
+        }
     }
 
     session.write_manifest()?;
@@ -726,6 +730,26 @@ struct ContentUploadStrategy {
 impl UploadStrategy for ContentUploadStrategy {
     fn upload(&mut self, _data: UploadData) -> Result<UploadResponse, SyncError> {
         unimplemented!("content folder uploading");
+    }
+}
+
+struct DebugUploadStrategy;
+
+impl UploadStrategy for DebugUploadStrategy {
+    fn upload(&mut self, data: UploadData) -> Result<UploadResponse, SyncError> {
+        log::info!("Copying {} to local folder", &data.name);
+
+        let path = Path::new(".tarmac-debug");
+
+        fs::create_dir_all(path).context(error::Io { path })?;
+
+        let sanitized_name = format!("{}-{}", data.name.as_ref(), &data.hash[..8]);
+        let sanitized_name = sanitized_name.replace('/', "_");
+        let file_path = path.join(sanitized_name);
+
+        fs::write(&file_path, &data.contents).context(error::Io { path: file_path })?;
+
+        Ok(UploadResponse { id: 0 })
     }
 }
 
