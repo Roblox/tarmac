@@ -41,6 +41,13 @@ impl OutputRect {
     pub fn size(&self) -> (u32, u32) {
         self.aabb.size
     }
+
+    pub fn max(&self) -> (u32, u32) {
+        (
+            self.aabb.pos.0 + self.aabb.size.0,
+            self.aabb.pos.1 + self.aabb.size.1,
+        )
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -8,7 +8,6 @@ use std::{
 };
 
 use packos::{InputRect, SimplePacker};
-use png;
 use sha2::{Digest, Sha256};
 use snafu::ResultExt;
 use walkdir::WalkDir;
@@ -19,6 +18,7 @@ use crate::{
     codegen::{AssetUrlTemplate, UrlAndSliceTemplate},
     data::{CodegenKind, Config, ImageSlice, InputConfig, InputManifest, Manifest},
     dpi_scale::dpi_scale_for_path,
+    image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
     spritesheet::Spritesheet,
@@ -365,49 +365,23 @@ impl SyncSession {
         }
 
         let mut packos_inputs = Vec::new();
-        let mut data_by_packos_id = HashMap::new();
+        let mut images_by_id = HashMap::new();
 
         for asset_name in input_group {
             // Build a png decoder for the given file
             let path = self.inputs.get(&asset_name).unwrap().path.as_path();
             let image_file = fs::File::open(path).context(error::Io { path })?;
-            let decoder = png::Decoder::new(image_file);
 
-            // Get the metadata we need from the image and read its data into a
-            // buffer for processing by the sprite packing algorithm
-            let (info, mut reader) = decoder.read_info().context(error::PngDecode)?;
-            let dimensions = (info.width, info.height);
-            let mut bytes = vec![0; info.buffer_size()];
-            reader.next_frame(&mut bytes).context(error::PngDecode)?;
+            let image = Image::decode_png(image_file).context(error::PngDecode)?;
 
-            log::trace!(
-                "Processing input {}\n\tDimensions: ({}, {})\n\tBitDepth: {:?}\n\tColorType: {:?}\n\tBytes: {}",
-                path.display(),
-                dimensions.0,
-                dimensions.1,
-                info.bit_depth,
-                info.color_type,
-                bytes.len()
-            );
-
-            // The packing algorithm expects to have an alpha channel, so
-            // non-RGBA images are unsupported
-            // TODO: Transcode images to RGBA if/when possible
-            if info.color_type != png::ColorType::RGBA {
-                return Err(SyncError::UnsupportedFormat {
-                    path: path.to_path_buf(),
-                    format: info.color_type,
-                });
-            }
-
-            let input = InputRect::new(dimensions);
-            data_by_packos_id.insert(input.id(), (asset_name.clone(), bytes));
+            let input = InputRect::new(image.size());
+            images_by_id.insert(input.id(), (asset_name.clone(), image));
 
             packos_inputs.push(input);
         }
 
-        let dimensions = self.root_config().max_spritesheet_size;
-        let packer = SimplePacker::with_max_size(dimensions);
+        let max_size = self.root_config().max_spritesheet_size;
+        let packer = SimplePacker::with_max_size(max_size);
         let pack_results = packer.pack(packos_inputs);
 
         log::info!("Generated {} spritesheets", pack_results.buckets().len());
@@ -416,51 +390,25 @@ impl SyncSession {
             .buckets()
             .iter()
             .map(|bucket| {
-                let mut image_data =
-                    vec![0; 4 * bucket.size().0 as usize * bucket.size().1 as usize];
+                let mut sheet_image = Image::new_empty_rgba8(bucket.size());
 
                 for item in bucket.items() {
-                    let (_, data) = &data_by_packos_id[&item.id()];
+                    let (_, image) = &images_by_id[&item.id()];
 
-                    rgba8_blit(
-                        &mut image_data,
-                        bucket.size(),
-                        data,
-                        item.size(),
-                        item.position(),
-                    );
+                    sheet_image.blit(image, item.position());
                 }
 
                 let mut contents = Vec::new();
-                let mut encoder =
-                    png::Encoder::new(&mut contents, bucket.size().0, bucket.size().1);
-
-                encoder.set_color(png::ColorType::RGBA);
-                encoder.set_depth(png::BitDepth::Eight);
-
-                // Write out RGBA8 image data
-                {
-                    let mut output_writer = encoder.write_header().context(error::PngEncode)?;
-
-                    output_writer
-                        .write_image_data(&image_data)
-                        .context(error::PngEncode)?;
-
-                    // On drop, output_writer will write the last chunk of the
-                    // PNG file.
-                }
+                sheet_image
+                    .encode_png(&mut contents)
+                    .context(error::PngEncode)?;
 
                 let slices = bucket
                     .items()
                     .iter()
                     .map(|item| {
-                        let (asset_name, _) = &data_by_packos_id[&item.id()];
-
-                        let max = (
-                            item.position().0 + item.size().0,
-                            item.position().1 + item.size().1,
-                        );
-                        let slice = ImageSlice::new(item.position(), max);
+                        let (asset_name, _) = &images_by_id[&item.id()];
+                        let slice = ImageSlice::new(item.position(), item.max());
 
                         (asset_name.clone(), slice)
                     })
@@ -776,24 +724,6 @@ fn is_image_asset(path: &Path) -> bool {
 
 fn generate_asset_hash(content: &[u8]) -> String {
     format!("{:x}", Sha256::digest(content))
-}
-
-fn rgba8_blit(
-    target_data: &mut [u8],
-    target_size: (u32, u32),
-    source_data: &[u8],
-    source_size: (u32, u32),
-    pos: (u32, u32),
-) {
-    for (y, row) in source_data
-        .chunks_exact((source_size.0 * 4) as usize)
-        .enumerate()
-    {
-        let start = 4 * (pos.0 + target_size.0 * (pos.1 + y as u32)) as usize;
-        let end = start + row.len();
-
-        (&mut target_data[start..end]).copy_from_slice(row);
-    }
 }
 
 mod error {

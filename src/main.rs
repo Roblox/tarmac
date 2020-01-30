@@ -5,6 +5,7 @@ mod commands;
 mod data;
 mod dpi_scale;
 mod glob;
+mod image;
 mod options;
 mod roblox_web_api;
 mod spritesheet;
