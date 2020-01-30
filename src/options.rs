@@ -58,8 +58,8 @@ pub struct SyncOptions {
     /// Options:
     ///
     /// - roblox: Upload to Roblox.com
-    ///
     /// - content-folder: Copy to content folder with hashed names
+    /// - debug: Copy to local debug directory for debugging output
     #[structopt(long)]
     pub target: SyncTarget,
 
@@ -72,6 +72,7 @@ pub struct SyncOptions {
 pub enum SyncTarget {
     Roblox,
     ContentFolder,
+    Debug,
 }
 
 impl FromStr for SyncTarget {
@@ -81,9 +82,10 @@ impl FromStr for SyncTarget {
         match value {
             "roblox" => Ok(SyncTarget::Roblox),
             "content-folder" => Ok(SyncTarget::ContentFolder),
+            "debug" => Ok(SyncTarget::Debug),
 
             _ => Err(String::from(
-                "Invalid sync target. Valid options are 'roblox' and 'content-folder'.",
+                "Invalid sync target. Valid options are roblox, content-folder, and debug.",
             )),
         }
     }
