@@ -8,7 +8,6 @@ use std::{
 };
 
 use packos::{InputRect, SimplePacker};
-use sha2::{Digest, Sha256};
 use snafu::ResultExt;
 use walkdir::WalkDir;
 
@@ -723,7 +722,7 @@ fn is_image_asset(path: &Path) -> bool {
 }
 
 fn generate_asset_hash(content: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(content))
+    format!("{}", blake3::hash(content).to_hex())
 }
 
 mod error {
