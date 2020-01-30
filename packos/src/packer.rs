@@ -147,21 +147,6 @@ impl SimplePacker {
             }
         }
 
-        for bucket in &buckets {
-            println!("Bucket size {:?}", bucket.size());
-
-            for item in &bucket.items {
-                if item.max().0 >= bucket.size().0 || item.max().1 >= bucket.size().1 {
-                    println!(
-                        "Item {:?} at pos {:?} and size {:?} overflowed bucket",
-                        item.id(),
-                        item.position(),
-                        item.size()
-                    );
-                }
-            }
-        }
-
         for bucket in &mut buckets {
             for item in &mut bucket.items {
                 item.aabb.size = (
