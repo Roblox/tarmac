@@ -5,7 +5,7 @@ use std::{
 
 static LAST_ID: AtomicUsize = AtomicUsize::new(1);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Id(NonZeroUsize);
 
 impl Id {

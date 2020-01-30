@@ -14,6 +14,10 @@ impl InputRect {
         }
     }
 
+    pub fn id(&self) -> Id {
+        self.id
+    }
+
     fn area(&self) -> u32 {
         self.size.0 * self.size.1
     }
@@ -25,15 +29,45 @@ pub struct OutputRect {
     aabb: Aabb,
 }
 
+impl OutputRect {
+    pub fn id(&self) -> Id {
+        self.id
+    }
+
+    pub fn position(&self) -> (u32, u32) {
+        self.aabb.pos
+    }
+
+    pub fn size(&self) -> (u32, u32) {
+        self.aabb.size
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PackResult {
     buckets: Vec<PackBucket>,
+}
+
+impl PackResult {
+    pub fn buckets(&self) -> &[PackBucket] {
+        &self.buckets
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct PackBucket {
     size: (u32, u32),
     items: Vec<OutputRect>,
+}
+
+impl PackBucket {
+    pub fn size(&self) -> (u32, u32) {
+        self.size
+    }
+
+    pub fn items(&self) -> &[OutputRect] {
+        &self.items
+    }
 }
 
 pub struct SimplePacker {

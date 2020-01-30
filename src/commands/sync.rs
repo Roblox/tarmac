@@ -7,9 +7,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use packos::{InputRect, SimplePacker};
 use png;
 use sha2::{Digest, Sha256};
-use sheep::{self, InputSprite, MaxrectsOptions, MaxrectsPacker};
 use snafu::ResultExt;
 use walkdir::WalkDir;
 
@@ -21,7 +21,7 @@ use crate::{
     dpi_scale::dpi_scale_for_path,
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
-    spritesheet::{OutputFormat, Spritesheet},
+    spritesheet::Spritesheet,
 };
 
 use self::error::Error;
@@ -360,63 +360,68 @@ impl SyncSession {
             return Ok(Vec::new());
         }
 
-        let packable_inputs: Vec<InputSprite> = input_group
-            .iter()
-            .map(|asset_name| {
-                // Build a png decoder for the given file
-                let path = self.inputs.get(asset_name).unwrap().path.as_path();
-                let image_file = fs::File::open(path).context(error::Io { path })?;
-                let decoder = png::Decoder::new(image_file);
+        let mut packos_inputs = Vec::new();
+        let mut data_by_packos_id = HashMap::new();
 
-                // Get the metadata we need from the image and read its data
-                // into a buffer for processing by the sprite packing algorithm
-                let (info, mut reader) = decoder.read_info().context(error::PngDecode)?;
-                let dimensions = (info.width, info.height);
-                let mut bytes = vec![0; info.buffer_size()];
-                reader.next_frame(&mut bytes).context(error::PngDecode)?;
+        for asset_name in input_group {
+            // Build a png decoder for the given file
+            let path = self.inputs.get(&asset_name).unwrap().path.as_path();
+            let image_file = fs::File::open(path).context(error::Io { path })?;
+            let decoder = png::Decoder::new(image_file);
 
-                log::trace!(
-                    "Processing input {}\n\tDimensions: ({}, {})\n\tBitDepth: {:?}\n\tColorType: {:?}\n\tBytes: {}",
-                    path.display(),
-                    dimensions.0,
-                    dimensions.1,
-                    info.bit_depth,
-                    info.color_type,
-                    bytes.len()
-                );
+            // Get the metadata we need from the image and read its data into a
+            // buffer for processing by the sprite packing algorithm
+            let (info, mut reader) = decoder.read_info().context(error::PngDecode)?;
+            let dimensions = (info.width, info.height);
+            let mut bytes = vec![0; info.buffer_size()];
+            reader.next_frame(&mut bytes).context(error::PngDecode)?;
 
-                // The packing algorithm expects to have an alpha channel, so
-                // non-RGBA images are unsupported
-                // TODO: Transcode images to RGBA if/when possible
-                if info.color_type != png::ColorType::RGBA {
-                    return Err(SyncError::UnsupportedFormat { path: path.to_path_buf(), format: info.color_type });
-                }
+            log::trace!(
+                "Processing input {}\n\tDimensions: ({}, {})\n\tBitDepth: {:?}\n\tColorType: {:?}\n\tBytes: {}",
+                path.display(),
+                dimensions.0,
+                dimensions.1,
+                info.bit_depth,
+                info.color_type,
+                bytes.len()
+            );
 
-                Ok(InputSprite { bytes, dimensions })
-            })
-            .collect::<Result<_, SyncError>>()?;
+            // The packing algorithm expects to have an alpha channel, so
+            // non-RGBA images are unsupported
+            // TODO: Transcode images to RGBA if/when possible
+            if info.color_type != png::ColorType::RGBA {
+                return Err(SyncError::UnsupportedFormat {
+                    path: path.to_path_buf(),
+                    format: info.color_type,
+                });
+            }
 
-        // The Maxrects sprite packing algorithm accepts options for the max
-        // width and height of the generated spritesheets
+            let input = InputRect::new(dimensions);
+            data_by_packos_id.insert(input.id(), (asset_name.clone(), bytes));
+
+            packos_inputs.push(input);
+        }
+
         let dimensions = self.root_config().max_spritesheet_size;
-        let opts = MaxrectsOptions::default()
-            .max_width(dimensions.0)
-            .max_height(dimensions.1);
+        let packer = SimplePacker::with_max_size(dimensions);
+        let pack_results = packer.pack(packos_inputs);
 
-        // Pack all inputs into one or more spritesheet buckets
-        let pack_results = sheep::pack::<MaxrectsPacker>(packable_inputs, 4, opts);
-
-        log::info!("Generated {} spritesheets", pack_results.len());
+        log::info!("Generated {} spritesheets", pack_results.buckets().len());
 
         pack_results
-            .into_iter()
-            .map(|result| {
-                let spritesheet = sheep::encode::<OutputFormat>(&result, input_group.clone());
+            .buckets()
+            .iter()
+            .map(|bucket| {
+                let image_data = vec![0; 4 * bucket.size().0 as usize * bucket.size().1 as usize];
+
+                for _item in bucket.items() {
+                    // TODO: blit data from data_from_packos_id[item.id()]
+                    // onto image_data.
+                }
 
                 let mut contents = Vec::new();
-
                 let mut encoder =
-                    png::Encoder::new(&mut contents, result.dimensions.0, result.dimensions.1);
+                    png::Encoder::new(&mut contents, bucket.size().0, bucket.size().1);
 
                 encoder.set_color(png::ColorType::RGBA);
                 encoder.set_depth(png::BitDepth::Eight);
@@ -426,14 +431,33 @@ impl SyncSession {
                     let mut output_writer = encoder.write_header().context(error::PngEncode)?;
 
                     output_writer
-                        .write_image_data(&result.bytes)
+                        .write_image_data(&image_data)
                         .context(error::PngEncode)?;
 
                     // On drop, output_writer will write the last chunk of the
                     // PNG file.
                 }
 
-                log::trace!("Generated spritesheet:\n{:#?}", spritesheet);
+                let slices = bucket
+                    .items()
+                    .iter()
+                    .map(|item| {
+                        let (asset_name, _) = &data_by_packos_id[&item.id()];
+
+                        let max = (
+                            item.position().0 + item.size().0,
+                            item.position().1 + item.size().1,
+                        );
+                        let slice = ImageSlice::new(item.position(), max);
+
+                        (asset_name.clone(), slice)
+                    })
+                    .collect();
+
+                let spritesheet = Spritesheet {
+                    dimensions: bucket.size(),
+                    slices,
+                };
 
                 Ok((contents, spritesheet))
             })

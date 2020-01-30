@@ -5,8 +5,8 @@ use sheep::{Format, SpriteAnchor};
 use crate::{asset_name::AssetName, data::ImageSlice};
 
 pub struct Spritesheet {
-    dimensions: (u32, u32),
-    slices: HashMap<AssetName, ImageSlice>,
+    pub dimensions: (u32, u32),
+    pub slices: HashMap<AssetName, ImageSlice>,
 }
 
 impl Spritesheet {

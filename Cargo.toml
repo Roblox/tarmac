@@ -40,5 +40,7 @@ structopt = { version = "0.3", default-features = false }
 toml = "0.5.3"
 walkdir = "2.2.9"
 
+packos = { path = "packos" }
+
 [target.'cfg(windows)'.dependencies]
 winreg = "0.6.2"
