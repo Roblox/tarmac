@@ -6,35 +6,35 @@ codegen = "url-and-slice"
 
 [inputs."pack-these/a.png"]
 hash = "b62c2151f6707f85ba133e573626e1b0168114a43d9c2b49de72cbbe8b9a1fe3"
-id = 4603887944
+id = 4642229227
 slice = [[0, 0], [128, 128]]
 packable = true
 codegen = "url-and-slice"
 
 [inputs."pack-these/b.png"]
 hash = "f2a765acc5cf3926a44425d0be7d68024e4b72fee9011f7f74477d9894b5619b"
-id = 4603887944
-slice = [[0, 128], [128, 256]]
+id = 4642229227
+slice = [[128, 0], [256, 128]]
 packable = true
 codegen = "url-and-slice"
 
 [inputs."pack-these/c.png"]
 hash = "6f9eb44824e8602e03aebc31c9fcc23ff48d0caf3cad88e76ae20b56476607b7"
-id = 4603887944
-slice = [[0, 256], [128, 384]]
+id = 4642229227
+slice = [[0, 128], [128, 256]]
 packable = true
 codegen = "url-and-slice"
 
 [inputs."pack-these/d.png"]
 hash = "a302fe619afc289ab7c4e53aabcb39c648351244194ac2a0ff85749ef61c1332"
-id = 4603887944
-slice = [[0, 384], [128, 512]]
+id = 4642229227
+slice = [[256, 0], [384, 128]]
 packable = true
 codegen = "url-and-slice"
 
 [inputs."pack-these/e.png"]
 hash = "b9f9115b00ab869ae7410d713996278f0d55576653bb0248514cff17b31b8c39"
-id = 4603887944
-slice = [[0, 512], [128, 640]]
+id = 4642229227
+slice = [[128, 128], [256, 256]]
 packable = true
 codegen = "url-and-slice"
