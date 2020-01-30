@@ -52,11 +52,7 @@ impl Image {
 
         let size = (info.width, info.height);
 
-        Ok(Self {
-            size,
-            data,
-            format: ImageFormat::Rgba8,
-        })
+        Ok(Self::new_rgba8(size, data))
     }
 
     pub fn encode_png<W: Write>(&self, output: W) -> Result<(), png::EncodingError> {
@@ -83,15 +79,21 @@ impl Image {
     pub fn blit(&mut self, other: &Image, pos: (u32, u32)) {
         assert!(self.format == ImageFormat::Rgba8 && other.format == ImageFormat::Rgba8);
 
-        let other_rows = other
-            .data
-            .chunks_exact((other.size.0 * other.format.stride()) as usize);
+        let stride = self.format.stride();
 
-        for (y, row) in other_rows.enumerate() {
-            let start = 4 * (pos.0 + self.size.0 * (pos.1 + y as u32)) as usize;
-            let end = start + row.len();
+        let other_width_bytes = other.size.0 * stride;
+        let other_rows = other.data.chunks_exact((other_width_bytes) as usize);
 
-            (&mut self.data[start..end]).copy_from_slice(row);
+        for (other_y, other_row) in other_rows.enumerate() {
+            let self_y = pos.1 + other_y as u32;
+
+            let start_px = pos.0 + self.size.0 * self_y;
+
+            let start_in_bytes = (stride * start_px) as usize;
+            let end_in_bytes = start_in_bytes + other_row.len();
+
+            let self_row = &mut self.data[start_in_bytes..end_in_bytes];
+            self_row.copy_from_slice(other_row);
         }
     }
 }

@@ -1,3 +1,5 @@
+use std::cmp::Reverse;
+
 use crate::{geometry::Aabb, id::Id};
 
 #[derive(Debug, Clone, Copy)]
@@ -43,10 +45,7 @@ impl OutputRect {
     }
 
     pub fn max(&self) -> (u32, u32) {
-        (
-            self.aabb.pos.0 + self.aabb.size.0,
-            self.aabb.pos.1 + self.aabb.size.1,
-        )
+        self.aabb.max()
     }
 }
 
@@ -99,7 +98,7 @@ impl SimplePacker {
 
     pub fn pack<I: IntoIterator<Item = InputRect>>(&self, items: I) -> PackResult {
         let mut remaining_items: Vec<_> = items.into_iter().collect();
-        remaining_items.sort_by_key(InputRect::area);
+        remaining_items.sort_by_key(|input| Reverse(input.area()));
 
         let num_items = remaining_items.len();
         log::trace!("Packing {} items", num_items);
@@ -141,6 +140,21 @@ impl SimplePacker {
             }
         }
 
+        for bucket in &buckets {
+            println!("Bucket size {:?}", bucket.size());
+
+            for item in &bucket.items {
+                if item.max().0 >= bucket.size().0 || item.max().1 >= bucket.size().1 {
+                    println!(
+                        "Item {:?} at pos {:?} and size {:?} overflowed bucket",
+                        item.id(),
+                        item.position(),
+                        item.size()
+                    );
+                }
+            }
+        }
+
         log::trace!(
             "Finished packing {} items into {} buckets",
             num_items,
@@ -152,12 +166,12 @@ impl SimplePacker {
 
     fn pack_one_bucket(
         remaining_items: &[InputRect],
-        size: (u32, u32),
+        bucket_size: (u32, u32),
     ) -> (PackBucket, Vec<InputRect>) {
         log::trace!(
             "Trying to pack {} remaining items into bucket of size {:?}",
             remaining_items.len(),
-            size
+            bucket_size
         );
 
         let mut anchors = vec![(0, 0)];
@@ -179,9 +193,14 @@ impl SimplePacker {
                     size: input_item.size,
                 };
 
-                items
+                let fits_with_others = items
                     .iter()
-                    .all(|packed_item| !potential_aabb.intersects(&packed_item.aabb))
+                    .all(|packed_item| !potential_aabb.intersects(&packed_item.aabb));
+
+                let max = potential_aabb.max();
+                let fits_in_bucket = max.0 < bucket_size.0 && max.1 < bucket_size.1;
+
+                fits_with_others && fits_in_bucket
             });
 
             if let Some(index) = fit_anchor {
@@ -190,12 +209,12 @@ impl SimplePacker {
                 log::trace!("Fit at anchor {:?}", anchor);
 
                 let new_anchor_hor = (anchor.0 + input_item.size.0, anchor.1);
-                if new_anchor_hor.0 < size.0 && new_anchor_hor.1 < size.1 {
+                if new_anchor_hor.0 < bucket_size.0 && new_anchor_hor.1 < bucket_size.1 {
                     anchors.push(new_anchor_hor);
                 }
 
                 let new_anchor_ver = (anchor.0, anchor.1 + input_item.size.1);
-                if new_anchor_ver.0 < size.0 && new_anchor_ver.1 < size.1 {
+                if new_anchor_ver.0 < bucket_size.0 && new_anchor_ver.1 < bucket_size.1 {
                     anchors.push(new_anchor_ver);
                 }
 
@@ -214,7 +233,10 @@ impl SimplePacker {
             }
         }
 
-        let bucket = PackBucket { size, items };
+        let bucket = PackBucket {
+            size: bucket_size,
+            items,
+        };
 
         (bucket, unpacked_items)
     }
