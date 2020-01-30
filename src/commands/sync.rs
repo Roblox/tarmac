@@ -380,7 +380,8 @@ impl SyncSession {
         }
 
         let max_size = self.root_config().max_spritesheet_size;
-        let packer = SimplePacker::with_max_size(max_size);
+
+        let packer = SimplePacker::new().max_size(max_size).padding(1);
         let pack_results = packer.pack(packos_inputs);
 
         log::info!("Generated {} spritesheets", pack_results.buckets().len());

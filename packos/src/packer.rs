@@ -79,6 +79,7 @@ impl PackBucket {
 pub struct SimplePacker {
     min_size: (u32, u32),
     max_size: (u32, u32),
+    padding: u32,
 }
 
 impl SimplePacker {
@@ -86,19 +87,25 @@ impl SimplePacker {
         Self {
             min_size: (128, 128),
             max_size: (1024, 1024),
+            padding: 0,
         }
     }
 
-    pub fn with_max_size(max_size: (u32, u32)) -> Self {
-        Self {
-            min_size: (128, 128),
-            max_size,
-        }
+    pub fn max_size(self, max_size: (u32, u32)) -> Self {
+        Self { max_size, ..self }
+    }
+
+    pub fn padding(self, padding: u32) -> Self {
+        Self { padding, ..self }
     }
 
     pub fn pack<I: IntoIterator<Item = InputRect>>(&self, items: I) -> PackResult {
         let mut remaining_items: Vec<_> = items.into_iter().collect();
         remaining_items.sort_by_key(|input| Reverse(input.area()));
+
+        for item in &mut remaining_items {
+            item.size = (item.size.0 + self.padding, item.size.1 + self.padding);
+        }
 
         let num_items = remaining_items.len();
         log::trace!("Packing {} items", num_items);
@@ -152,6 +159,15 @@ impl SimplePacker {
                         item.size()
                     );
                 }
+            }
+        }
+
+        for bucket in &mut buckets {
+            for item in &mut bucket.items {
+                item.aabb.size = (
+                    item.aabb.size.0 - self.padding,
+                    item.aabb.size.1 - self.padding,
+                );
             }
         }
 
