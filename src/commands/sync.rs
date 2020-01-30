@@ -412,11 +412,19 @@ impl SyncSession {
             .buckets()
             .iter()
             .map(|bucket| {
-                let image_data = vec![0; 4 * bucket.size().0 as usize * bucket.size().1 as usize];
+                let mut image_data =
+                    vec![0; 4 * bucket.size().0 as usize * bucket.size().1 as usize];
 
-                for _item in bucket.items() {
-                    // TODO: blit data from data_from_packos_id[item.id()]
-                    // onto image_data.
+                for item in bucket.items() {
+                    let (_, data) = &data_by_packos_id[&item.id()];
+
+                    rgba8_blit(
+                        &mut image_data,
+                        bucket.size(),
+                        data,
+                        item.size(),
+                        item.position(),
+                    );
                 }
 
                 let mut contents = Vec::new();
@@ -732,6 +740,16 @@ fn is_image_asset(path: &Path) -> bool {
 
 fn generate_asset_hash(content: &[u8]) -> String {
     format!("{:x}", Sha256::digest(content))
+}
+
+fn rgba8_blit(
+    target_data: &mut [u8],
+    target_size: (u32, u32),
+    source_data: &[u8],
+    source_size: (u32, u32),
+    pos: (u32, u32),
+) {
+    // TODO
 }
 
 mod error {
