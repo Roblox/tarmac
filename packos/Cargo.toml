@@ -8,6 +8,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+log = "0.4.8"
 
 [dev-dependencies]
+env_logger = "0.7.1"
 insta = "0.13.1"

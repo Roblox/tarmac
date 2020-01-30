@@ -1,7 +1,6 @@
-// TODO: Should this Id type be specified by the user of the library? Can we
-// generate them internally and give them to the consumer as they construct
-// `InputRect` objects?
-pub type Id = usize;
+mod id;
+
+pub use id::Id;
 
 #[derive(Debug, Clone, Copy)]
 pub struct InputRect {
@@ -11,7 +10,10 @@ pub struct InputRect {
 
 impl InputRect {
     pub fn new(size: (u32, u32)) -> Self {
-        Self { id: 0, size }
+        Self {
+            id: Id::new(),
+            size,
+        }
     }
 
     fn area(&self) -> u32 {
@@ -25,10 +27,12 @@ pub struct OutputRect {
     aabb: Aabb,
 }
 
+#[derive(Debug, Clone)]
 pub struct PackResult {
     buckets: Vec<PackBucket>,
 }
 
+#[derive(Debug, Clone)]
 pub struct PackBucket {
     size: (u32, u32),
     items: Vec<OutputRect>,
@@ -47,15 +51,25 @@ impl SimplePacker {
         }
     }
 
+    pub fn with_max_size(max_size: (u32, u32)) -> Self {
+        Self {
+            min_size: (128, 128),
+            max_size,
+        }
+    }
+
     pub fn pack<I: IntoIterator<Item = InputRect>>(&self, items: I) -> PackResult {
         let mut remaining_items: Vec<_> = items.into_iter().collect();
         remaining_items.sort_by_key(InputRect::area);
 
+        let num_items = remaining_items.len();
+        log::trace!("Packing {} items", num_items);
+
         let mut buckets = Vec::new();
 
         while !remaining_items.is_empty() {
-            // TODO: Compute minimum size from total area of input images, rounded
-            // up to nearest po2 and clamped to max_size.
+            // TODO: Compute minimum size from total area of remaining images,
+            // rounded up to nearest po2 and clamped to max_size.
             let mut current_size = self.min_size;
 
             loop {
@@ -88,19 +102,77 @@ impl SimplePacker {
             }
         }
 
+        log::trace!(
+            "Finished packing {} items into {} buckets",
+            num_items,
+            buckets.len()
+        );
+
         PackResult { buckets }
     }
 
     fn pack_one_bucket(
-        sorted_items: &[InputRect],
+        remaining_items: &[InputRect],
         size: (u32, u32),
     ) -> (PackBucket, Vec<InputRect>) {
+        log::trace!(
+            "Trying to pack {} remaining items into bucket of size {:?}",
+            remaining_items.len(),
+            size
+        );
+
         let mut anchors = vec![(0, 0)];
-        let mut items = Vec::new();
+        let mut items: Vec<OutputRect> = Vec::new();
         let mut unpacked_items = Vec::new();
 
-        for item in sorted_items {
-            unpacked_items.push(*item);
+        for input_item in remaining_items {
+            log::trace!(
+                "For item {:?} ({}x{}), evaluating these anchors: {:?}",
+                input_item.id,
+                input_item.size.0,
+                input_item.size.1,
+                anchors
+            );
+
+            let fit_anchor = anchors.iter().copied().position(|anchor| {
+                let potential_aabb = Aabb {
+                    pos: anchor,
+                    size: input_item.size,
+                };
+
+                items
+                    .iter()
+                    .all(|packed_item| !potential_aabb.intersects(&packed_item.aabb))
+            });
+
+            if let Some(index) = fit_anchor {
+                let anchor = anchors.remove(index);
+
+                log::trace!("Fit at anchor {:?}", anchor);
+
+                let new_anchor_hor = (anchor.0 + input_item.size.0, anchor.1);
+                if new_anchor_hor.0 < size.0 && new_anchor_hor.1 < size.1 {
+                    anchors.push(new_anchor_hor);
+                }
+
+                let new_anchor_ver = (anchor.0, anchor.1 + input_item.size.1);
+                if new_anchor_ver.0 < size.0 && new_anchor_ver.1 < size.1 {
+                    anchors.push(new_anchor_ver);
+                }
+
+                let output_item = OutputRect {
+                    id: input_item.id,
+                    aabb: Aabb {
+                        pos: anchor,
+                        size: input_item.size,
+                    },
+                };
+                items.push(output_item);
+            } else {
+                log::trace!("Did not fit in this bucket.");
+
+                unpacked_items.push(*input_item);
+            }
         }
 
         let bucket = PackBucket { size, items };
@@ -131,8 +203,8 @@ impl Aabb {
             (self.size.1 + other.size.1) as i32 / 2,
         );
 
-        let x_overlap = (b_center.0 - a_center.0).abs() <= size_avg.0;
-        let y_overlap = (b_center.1 - a_center.1).abs() <= size_avg.1;
+        let x_overlap = (b_center.0 - a_center.0).abs() < size_avg.0;
+        let y_overlap = (b_center.1 - a_center.1).abs() < size_avg.1;
 
         x_overlap && y_overlap
     }
