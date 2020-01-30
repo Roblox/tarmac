@@ -38,7 +38,7 @@ impl AssetName {
     /// Spritesheets don't have any canonical name provided by Tarmac's inputs;
     /// when we upload them, we want to give them a simple dummy name
     pub fn spritesheet() -> Self {
-        AssetName("spritesheet".into())
+        AssetName("spritesheet.png".into())
     }
 }
 
