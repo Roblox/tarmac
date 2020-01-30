@@ -749,7 +749,15 @@ fn rgba8_blit(
     source_size: (u32, u32),
     pos: (u32, u32),
 ) {
-    // TODO
+    for (y, row) in source_data
+        .chunks_exact((source_size.0 * 4) as usize)
+        .enumerate()
+    {
+        let start = 4 * (pos.0 + target_size.0 * (pos.1 + y as u32)) as usize;
+        let end = start + row.len();
+
+        (&mut target_data[start..end]).copy_from_slice(row);
+    }
 }
 
 mod error {
