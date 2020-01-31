@@ -1,94 +1,39 @@
-use std::cmp::Reverse;
+use std::{borrow::Borrow, cmp::Reverse};
 
-use crate::{geometry::Rect, id::Id};
+use crate::{
+    geometry::Rect,
+    types::{Bucket, InputItem, OutputItem, PackOutput},
+};
 
-#[derive(Debug, Clone, Copy)]
-pub struct InputItem {
-    id: Id,
-    size: (u32, u32),
-}
-
-impl InputItem {
-    pub fn new(size: (u32, u32)) -> Self {
-        Self {
-            id: Id::new(),
-            size,
-        }
-    }
-
-    pub fn id(&self) -> Id {
-        self.id
-    }
-
-    fn area(&self) -> u32 {
-        self.size.0 * self.size.1
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct OutputItem {
-    id: Id,
-    rect: Rect,
-}
-
-impl OutputItem {
-    pub fn id(&self) -> Id {
-        self.id
-    }
-
-    pub fn position(&self) -> (u32, u32) {
-        self.rect.pos
-    }
-
-    pub fn size(&self) -> (u32, u32) {
-        self.rect.size
-    }
-
-    pub fn max(&self) -> (u32, u32) {
-        self.rect.max()
-    }
-}
-
+/// A configurable rectangle packer using a simple packing algorithm.
 #[derive(Debug, Clone)]
-pub struct PackOutput {
-    buckets: Vec<Bucket>,
-}
-
-impl PackOutput {
-    pub fn buckets(&self) -> &[Bucket] {
-        &self.buckets
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Bucket {
-    size: (u32, u32),
-    items: Vec<OutputItem>,
-}
-
-impl Bucket {
-    pub fn size(&self) -> (u32, u32) {
-        self.size
-    }
-
-    pub fn items(&self) -> &[OutputItem] {
-        &self.items
-    }
-}
-
 pub struct SimplePacker {
     min_size: (u32, u32),
     max_size: (u32, u32),
     padding: u32,
 }
 
+impl Default for SimplePacker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SimplePacker {
+    /// Constructs a new `SimplePacker` with the default configuration:
+    /// * `min_size` of 128x128
+    /// * `max_size` of 1024x1024
+    /// * `padding` of 0
     pub fn new() -> Self {
         Self {
             min_size: (128, 128),
             max_size: (1024, 1024),
             padding: 0,
         }
+    }
+
+    pub fn min_size(self, min_size: (u32, u32)) -> Self {
+        Self { min_size, ..self }
     }
 
     pub fn max_size(self, max_size: (u32, u32)) -> Self {
@@ -99,8 +44,18 @@ impl SimplePacker {
         Self { padding, ..self }
     }
 
-    pub fn pack<I: IntoIterator<Item = InputItem>>(&self, items: I) -> PackOutput {
-        let mut remaining_items: Vec<_> = items.into_iter().collect();
+    /// Pack a group of input rectangles into zero or more buckets.
+    ///
+    /// Accepts any type that can turn into an iterator of anything that can
+    /// borrow as an `InputItem`. This helps make sure that types like
+    /// `Vec<InputItem>`, `&[InputItem]`, and iterators that return either
+    /// `InputItem` or `&InputItem` can be valid inputs.
+    pub fn pack<Iter, Item>(&self, items: Iter) -> PackOutput
+    where
+        Iter: IntoIterator<Item = Item>,
+        Item: Borrow<InputItem>,
+    {
+        let mut remaining_items: Vec<_> = items.into_iter().map(|item| *item.borrow()).collect();
         remaining_items.sort_by_key(|input| Reverse(input.area()));
 
         for item in &mut remaining_items {
@@ -182,7 +137,7 @@ impl SimplePacker {
         for input_item in remaining_items {
             log::trace!(
                 "For item {:?} ({}x{}), evaluating these anchors: {:?}",
-                input_item.id,
+                input_item.id(),
                 input_item.size.0,
                 input_item.size.1,
                 anchors
@@ -220,7 +175,7 @@ impl SimplePacker {
                 }
 
                 let output_item = OutputItem {
-                    id: input_item.id,
+                    id: input_item.id(),
                     rect: Rect {
                         pos: anchor,
                         size: input_item.size,

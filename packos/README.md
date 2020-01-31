@@ -9,6 +9,9 @@
     <a href="https://crates.io/crates/packos">
         <img src="https://img.shields.io/crates/v/packos.svg?label=latest%20release" alt="Latest release" />
     </a>
+    <a href="https://docs.rs/packos">
+        <img src="https://img.shields.io/badge/docs-docs.rs-orange.svg" alt="Packos docs on docs.rs" />
+    </a>
 </div>
 
 <hr />
