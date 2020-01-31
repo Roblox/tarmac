@@ -23,7 +23,7 @@ It's designed to:
 1. Err on the side of simplicity.
 2. Fit hard constraints:
 	- Fixed padding
-	- Max sizes
+	- Minimum and maximum bucket sizes
 	- Power-of-two dimensions
 
 Packos leaves applying the rectangle packing solution to the consuming application.
