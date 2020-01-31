@@ -15,10 +15,13 @@
 
 Packos is a small library for packing rectangles. It was built for [Tarmac](https://github.com/rojo-rbx/tarmac), a tool that manages assets for Roblox projects, including packing images into spritesheets.
 
-It's designed to fulfill these needs:
+It's designed to:
 
-1. Err on the side of simplicity over efficient results
-2. Fit constraints like specific max sizes, extra padding, and power-of-two dimensions.
+1. Err on the side of simplicity.
+2. Fit hard constraints:
+	- Fixed padding
+	- Max sizes
+	- Power-of-two dimensions
 
 Packos leaves applying the rectangle packing solution to the consuming application.
 
