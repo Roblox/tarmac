@@ -7,9 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use png;
-use sha2::{Digest, Sha256};
-use sheep::{self, InputSprite, MaxrectsOptions, MaxrectsPacker};
+use packos::{InputRect, SimplePacker};
 use snafu::ResultExt;
 use walkdir::WalkDir;
 
@@ -19,9 +17,10 @@ use crate::{
     codegen::{AssetUrlTemplate, UrlAndSliceTemplate},
     data::{CodegenKind, Config, ImageSlice, InputConfig, InputManifest, Manifest},
     dpi_scale::dpi_scale_for_path,
+    image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
-    spritesheet::{OutputFormat, Spritesheet},
+    spritesheet::Spritesheet,
 };
 
 use self::error::Error;
@@ -364,80 +363,61 @@ impl SyncSession {
             return Ok(Vec::new());
         }
 
-        let packable_inputs: Vec<InputSprite> = input_group
-            .iter()
-            .map(|asset_name| {
-                // Build a png decoder for the given file
-                let path = self.inputs.get(asset_name).unwrap().path.as_path();
-                let image_file = fs::File::open(path).context(error::Io { path })?;
-                let decoder = png::Decoder::new(image_file);
+        let mut packos_inputs = Vec::new();
+        let mut images_by_id = HashMap::new();
 
-                // Get the metadata we need from the image and read its data
-                // into a buffer for processing by the sprite packing algorithm
-                let (info, mut reader) = decoder.read_info().context(error::PngDecode)?;
-                let dimensions = (info.width, info.height);
-                let mut bytes = vec![0; info.buffer_size()];
-                reader.next_frame(&mut bytes).context(error::PngDecode)?;
+        for asset_name in input_group {
+            // Build a png decoder for the given file
+            let path = self.inputs.get(&asset_name).unwrap().path.as_path();
+            let image_file = fs::File::open(path).context(error::Io { path })?;
 
-                log::trace!(
-                    "Processing input {}\n\tDimensions: ({}, {})\n\tBitDepth: {:?}\n\tColorType: {:?}\n\tBytes: {}",
-                    path.display(),
-                    dimensions.0,
-                    dimensions.1,
-                    info.bit_depth,
-                    info.color_type,
-                    bytes.len()
-                );
+            let image = Image::decode_png(image_file).context(error::PngDecode)?;
 
-                // The packing algorithm expects to have an alpha channel, so
-                // non-RGBA images are unsupported
-                // TODO: Transcode images to RGBA if/when possible
-                if info.color_type != png::ColorType::RGBA {
-                    return Err(SyncError::UnsupportedFormat { path: path.to_path_buf(), format: info.color_type });
-                }
+            let input = InputRect::new(image.size());
+            images_by_id.insert(input.id(), (asset_name.clone(), image));
 
-                Ok(InputSprite { bytes, dimensions })
-            })
-            .collect::<Result<_, SyncError>>()?;
+            packos_inputs.push(input);
+        }
 
-        // The Maxrects sprite packing algorithm accepts options for the max
-        // width and height of the generated spritesheets
-        let dimensions = self.root_config().max_spritesheet_size;
-        let opts = MaxrectsOptions::default()
-            .max_width(dimensions.0)
-            .max_height(dimensions.1);
+        let max_size = self.root_config().max_spritesheet_size;
 
-        // Pack all inputs into one or more spritesheet buckets
-        let pack_results = sheep::pack::<MaxrectsPacker>(packable_inputs, 4, opts);
+        let packer = SimplePacker::new().max_size(max_size).padding(1);
+        let pack_results = packer.pack(packos_inputs);
 
-        log::info!("Generated {} spritesheets", pack_results.len());
+        log::info!("Generated {} spritesheets", pack_results.buckets().len());
 
         pack_results
-            .into_iter()
-            .map(|result| {
-                let spritesheet = sheep::encode::<OutputFormat>(&result, input_group.clone());
+            .buckets()
+            .iter()
+            .map(|bucket| {
+                let mut sheet_image = Image::new_empty_rgba8(bucket.size());
 
-                let mut contents = Vec::new();
+                for item in bucket.items() {
+                    let (_, image) = &images_by_id[&item.id()];
 
-                let mut encoder =
-                    png::Encoder::new(&mut contents, result.dimensions.0, result.dimensions.1);
-
-                encoder.set_color(png::ColorType::RGBA);
-                encoder.set_depth(png::BitDepth::Eight);
-
-                // Write out RGBA8 image data
-                {
-                    let mut output_writer = encoder.write_header().context(error::PngEncode)?;
-
-                    output_writer
-                        .write_image_data(&result.bytes)
-                        .context(error::PngEncode)?;
-
-                    // On drop, output_writer will write the last chunk of the
-                    // PNG file.
+                    sheet_image.blit(image, item.position());
                 }
 
-                log::trace!("Generated spritesheet:\n{:#?}", spritesheet);
+                let mut contents = Vec::new();
+                sheet_image
+                    .encode_png(&mut contents)
+                    .context(error::PngEncode)?;
+
+                let slices = bucket
+                    .items()
+                    .iter()
+                    .map(|item| {
+                        let (asset_name, _) = &images_by_id[&item.id()];
+                        let slice = ImageSlice::new(item.position(), item.max());
+
+                        (asset_name.clone(), slice)
+                    })
+                    .collect();
+
+                let spritesheet = Spritesheet {
+                    dimensions: bucket.size(),
+                    slices,
+                };
 
                 Ok((contents, spritesheet))
             })
@@ -743,7 +723,7 @@ fn is_image_asset(path: &Path) -> bool {
 }
 
 fn generate_asset_hash(content: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(content))
+    format!("{}", blake3::hash(content).to_hex())
 }
 
 mod error {
