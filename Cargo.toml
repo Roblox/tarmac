@@ -1,7 +1,7 @@
 [package]
 name = "tarmac"
 description = "Manages assets for Roblox projects"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Lucien Greathouse <me@lpghatguy.com>"]
 edition = "2018"
 license = "MIT"
@@ -24,6 +24,8 @@ default-members = [
 ]
 
 [dependencies]
+packos = { path = "packos", version = "0.1.0" }
+
 blake3 = "0.1.3"
 env_logger = "0.7.0"
 globset = "0.4.4"
@@ -38,8 +40,6 @@ snafu = "0.6.0"
 structopt = { version = "0.3", default-features = false }
 toml = "0.5.3"
 walkdir = "2.2.9"
-
-packos = { path = "packos" }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.6.2"
