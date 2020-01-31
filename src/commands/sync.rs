@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use packos::{InputRect, SimplePacker};
+use packos::{InputItem, SimplePacker};
 use snafu::ResultExt;
 use walkdir::WalkDir;
 
@@ -373,7 +373,7 @@ impl SyncSession {
 
             let image = Image::decode_png(image_file).context(error::PngDecode)?;
 
-            let input = InputRect::new(image.size());
+            let input = InputItem::new(image.size());
             images_by_id.insert(input.id(), (asset_name.clone(), image));
 
             packos_inputs.push(input);

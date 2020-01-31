@@ -1,14 +1,14 @@
 use std::cmp::Reverse;
 
-use crate::{geometry::Aabb, id::Id};
+use crate::{geometry::Rect, id::Id};
 
 #[derive(Debug, Clone, Copy)]
-pub struct InputRect {
+pub struct InputItem {
     id: Id,
     size: (u32, u32),
 }
 
-impl InputRect {
+impl InputItem {
     pub fn new(size: (u32, u32)) -> Self {
         Self {
             id: Id::new(),
@@ -26,52 +26,52 @@ impl InputRect {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct OutputRect {
+pub struct OutputItem {
     id: Id,
-    aabb: Aabb,
+    rect: Rect,
 }
 
-impl OutputRect {
+impl OutputItem {
     pub fn id(&self) -> Id {
         self.id
     }
 
     pub fn position(&self) -> (u32, u32) {
-        self.aabb.pos
+        self.rect.pos
     }
 
     pub fn size(&self) -> (u32, u32) {
-        self.aabb.size
+        self.rect.size
     }
 
     pub fn max(&self) -> (u32, u32) {
-        self.aabb.max()
+        self.rect.max()
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct PackResult {
-    buckets: Vec<PackBucket>,
+pub struct PackOutput {
+    buckets: Vec<Bucket>,
 }
 
-impl PackResult {
-    pub fn buckets(&self) -> &[PackBucket] {
+impl PackOutput {
+    pub fn buckets(&self) -> &[Bucket] {
         &self.buckets
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct PackBucket {
+pub struct Bucket {
     size: (u32, u32),
-    items: Vec<OutputRect>,
+    items: Vec<OutputItem>,
 }
 
-impl PackBucket {
+impl Bucket {
     pub fn size(&self) -> (u32, u32) {
         self.size
     }
 
-    pub fn items(&self) -> &[OutputRect] {
+    pub fn items(&self) -> &[OutputItem] {
         &self.items
     }
 }
@@ -99,7 +99,7 @@ impl SimplePacker {
         Self { padding, ..self }
     }
 
-    pub fn pack<I: IntoIterator<Item = InputRect>>(&self, items: I) -> PackResult {
+    pub fn pack<I: IntoIterator<Item = InputItem>>(&self, items: I) -> PackOutput {
         let mut remaining_items: Vec<_> = items.into_iter().collect();
         remaining_items.sort_by_key(|input| Reverse(input.area()));
 
@@ -149,9 +149,9 @@ impl SimplePacker {
 
         for bucket in &mut buckets {
             for item in &mut bucket.items {
-                item.aabb.size = (
-                    item.aabb.size.0 - self.padding,
-                    item.aabb.size.1 - self.padding,
+                item.rect.size = (
+                    item.rect.size.0 - self.padding,
+                    item.rect.size.1 - self.padding,
                 );
             }
         }
@@ -162,13 +162,13 @@ impl SimplePacker {
             buckets.len()
         );
 
-        PackResult { buckets }
+        PackOutput { buckets }
     }
 
     fn pack_one_bucket(
-        remaining_items: &[InputRect],
+        remaining_items: &[InputItem],
         bucket_size: (u32, u32),
-    ) -> (PackBucket, Vec<InputRect>) {
+    ) -> (Bucket, Vec<InputItem>) {
         log::trace!(
             "Trying to pack {} remaining items into bucket of size {:?}",
             remaining_items.len(),
@@ -176,7 +176,7 @@ impl SimplePacker {
         );
 
         let mut anchors = vec![(0, 0)];
-        let mut items: Vec<OutputRect> = Vec::new();
+        let mut items: Vec<OutputItem> = Vec::new();
         let mut unpacked_items = Vec::new();
 
         for input_item in remaining_items {
@@ -189,16 +189,16 @@ impl SimplePacker {
             );
 
             let fit_anchor = anchors.iter().copied().position(|anchor| {
-                let potential_aabb = Aabb {
+                let potential_rect = Rect {
                     pos: anchor,
                     size: input_item.size,
                 };
 
                 let fits_with_others = items
                     .iter()
-                    .all(|packed_item| !potential_aabb.intersects(&packed_item.aabb));
+                    .all(|packed_item| !potential_rect.intersects(&packed_item.rect));
 
-                let max = potential_aabb.max();
+                let max = potential_rect.max();
                 let fits_in_bucket = max.0 < bucket_size.0 && max.1 < bucket_size.1;
 
                 fits_with_others && fits_in_bucket
@@ -219,9 +219,9 @@ impl SimplePacker {
                     anchors.push(new_anchor_ver);
                 }
 
-                let output_item = OutputRect {
+                let output_item = OutputItem {
                     id: input_item.id,
-                    aabb: Aabb {
+                    rect: Rect {
                         pos: anchor,
                         size: input_item.size,
                     },
@@ -234,7 +234,7 @@ impl SimplePacker {
             }
         }
 
-        let bucket = PackBucket {
+        let bucket = Bucket {
             size: bucket_size,
             items,
         };

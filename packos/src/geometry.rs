@@ -1,11 +1,11 @@
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Aabb {
+pub(crate) struct Rect {
     pub pos: (u32, u32),
     pub size: (u32, u32),
 }
 
-impl Aabb {
-    pub fn intersects(&self, other: &Aabb) -> bool {
+impl Rect {
+    pub fn intersects(&self, other: &Rect) -> bool {
         let self_max = self.max();
         let other_max = other.max();
 

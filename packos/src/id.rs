@@ -5,6 +5,7 @@ use std::{
 
 static LAST_ID: AtomicUsize = AtomicUsize::new(1);
 
+/// Represents an item tracked by Packos.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Id(NonZeroUsize);
 
