@@ -19,11 +19,11 @@ Tarmac is inspired by projects like [Webpack](https://webpack.js.org/) that allo
 
 ## Installation
 
-### Windows and macOS
-Pre-built binaries are available for Windows and macOS from the [GitHub releases page](https://github.com/rojo-rbx/tarmac/releases).
+### From GitHub Releases
+Pre-built binaries are available for 64-bit Windows, macOS, and Linux from the [GitHub releases page](https://github.com/rojo-rbx/tarmac/releases).
 
 ### From Crates.io
-Tarmac requires Rust 1.37+ to build.
+Tarmac requires Rust 1.39+ to build.
 
 ```bash
 cargo install tarmac
