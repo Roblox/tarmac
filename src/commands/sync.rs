@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     collections::{HashMap, VecDeque},
     env,
     fs::{self, File},
@@ -19,8 +18,12 @@ use crate::{
     dpi_scale::dpi_scale_for_path,
     image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
-    roblox_web_api::{ImageUploadData, RobloxApiClient},
+    roblox_web_api::RobloxApiClient,
     spritesheet::Spritesheet,
+    sync_backend::{
+        ContentSyncBackend, DebugSyncBackend, Error as SyncBackendError, RobloxSyncBackend,
+        SyncBackend, UploadInfo,
+    },
 };
 
 use self::error::Error;
@@ -45,17 +48,17 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
     match options.target {
         SyncTarget::Roblox => {
             let api_client = api_client.as_mut().ok_or(Error::NoAuth)?;
-            let mut strategy = RobloxUploadStrategy { api_client };
+            let mut strategy = RobloxSyncBackend::new(api_client);
 
             session.sync(&mut strategy)?;
         }
         SyncTarget::ContentFolder => {
-            let mut strategy = ContentUploadStrategy {};
+            let mut strategy = ContentSyncBackend {};
 
             session.sync(&mut strategy)?;
         }
         SyncTarget::Debug => {
-            let mut strategy = DebugUploadStrategy::new();
+            let mut strategy = DebugSyncBackend::new();
             session.sync(&mut strategy)?;
         }
     }
@@ -270,7 +273,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync<S: UploadStrategy>(&mut self, strategy: &mut S) -> Result<(), Error> {
+    fn sync<S: SyncBackend>(&mut self, strategy: &mut S) -> Result<(), Error> {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         struct InputCompatibility {
             packable: bool,
@@ -424,7 +427,7 @@ impl SyncSession {
             .collect()
     }
 
-    fn sync_unpackable_image<S: UploadStrategy>(
+    fn sync_unpackable_image<S: SyncBackend>(
         &mut self,
         strategy: &mut S,
         input_name: &AssetName,
@@ -435,7 +438,7 @@ impl SyncSession {
 
         input.hash = Some(hash.clone());
 
-        let upload_data = UploadData {
+        let upload_data = UploadInfo {
             name: input_name.clone(),
             contents,
             hash: hash.clone(),
@@ -494,7 +497,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync_packed_image<S: UploadStrategy>(
+    fn sync_packed_image<S: SyncBackend>(
         &mut self,
         strategy: &mut S,
         contents: Vec<u8>,
@@ -528,7 +531,7 @@ impl SyncSession {
 
         let hash = generate_asset_hash(contents.as_ref());
 
-        let upload_data = UploadData {
+        let upload_data = UploadInfo {
             name: AssetName::spritesheet(),
             contents,
             hash: hash.clone(),
@@ -626,93 +629,6 @@ impl SyncSession {
     }
 }
 
-struct UploadResponse {
-    id: u64,
-    // TODO: Other asset URL construction information to support content folder
-    // shenanigans.
-}
-
-struct UploadData {
-    name: AssetName,
-    contents: Vec<u8>,
-    hash: String,
-}
-
-trait UploadStrategy {
-    fn upload(&mut self, data: UploadData) -> Result<UploadResponse, SyncError>;
-}
-
-struct RobloxUploadStrategy<'a> {
-    api_client: &'a mut RobloxApiClient,
-}
-
-impl<'a> UploadStrategy for RobloxUploadStrategy<'a> {
-    fn upload(&mut self, data: UploadData) -> Result<UploadResponse, SyncError> {
-        log::info!("Uploading {} to Roblox", &data.name);
-
-        let response = self
-            .api_client
-            .upload_image(ImageUploadData {
-                image_data: Cow::Owned(data.contents),
-                name: data.name.as_ref(),
-                description: "Uploaded by Tarmac.",
-            })
-            .expect("Upload failed");
-
-        log::info!(
-            "Uploaded {} to ID {}",
-            &data.name,
-            response.backing_asset_id
-        );
-
-        Ok(UploadResponse {
-            id: response.backing_asset_id,
-        })
-    }
-}
-
-struct ContentUploadStrategy {
-    // TODO: Studio install information
-}
-
-impl UploadStrategy for ContentUploadStrategy {
-    fn upload(&mut self, _data: UploadData) -> Result<UploadResponse, SyncError> {
-        unimplemented!("content folder uploading");
-    }
-}
-
-struct DebugUploadStrategy {
-    last_id: u64,
-}
-
-impl DebugUploadStrategy {
-    fn new() -> Self {
-        Self { last_id: 0 }
-    }
-}
-
-impl UploadStrategy for DebugUploadStrategy {
-    fn upload(&mut self, data: UploadData) -> Result<UploadResponse, SyncError> {
-        log::info!("Copying {} to local folder", &data.name);
-
-        self.last_id += 1;
-        let id = self.last_id;
-
-        let path = Path::new(".tarmac-debug");
-        fs::create_dir_all(path).context(error::Io { path })?;
-
-        let mut file_path = path.join(id.to_string());
-
-        if let Some(ext) = Path::new(data.name.as_ref()).extension() {
-            file_path.set_extension(ext);
-        }
-
-        fs::write(&file_path, &data.contents).context(error::Io { path: file_path })?;
-
-        Ok(UploadResponse { id })
-    }
-}
-
 fn is_image_asset(path: &Path) -> bool {
     match path.extension().and_then(|ext| ext.to_str()) {
         // TODO: Expand the definition of images?
@@ -727,11 +643,11 @@ fn generate_asset_hash(content: &[u8]) -> String {
 }
 
 mod error {
+    use super::*;
+
     use crate::data::{ConfigError, ManifestError};
-    use png;
     use snafu::Snafu;
     use std::{io, path::PathBuf};
-    use walkdir;
 
     #[derive(Debug, Snafu)]
     #[snafu(visibility = "pub(super)")]
@@ -739,6 +655,11 @@ mod error {
         #[snafu(display("{}", source))]
         Config {
             source: ConfigError,
+        },
+
+        #[snafu(display("{}", source))]
+        Backend {
+            source: SyncBackendError,
         },
 
         #[snafu(display("{}", source))]
@@ -792,5 +713,11 @@ mod error {
         PngEncode {
             source: png::EncodingError,
         },
+    }
+
+    impl From<SyncBackendError> for Error {
+        fn from(source: SyncBackendError) -> Self {
+            Self::Backend { source }
+        }
     }
 }
