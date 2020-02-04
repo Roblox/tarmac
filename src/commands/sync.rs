@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, VecDeque},
     env,
     fs::{self, File},
     io::Write,
@@ -276,13 +276,13 @@ impl SyncSession {
     }
 
     fn sync<S: SyncBackend>(&mut self, strategy: &mut S) -> Result<(), Error> {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         struct InputCompatibility {
             packable: bool,
             dpi_scale: u32,
         }
 
-        let mut compatible_input_groups = HashMap::new();
+        let mut compatible_input_groups = BTreeMap::new();
 
         for (input_name, input) in &self.inputs {
             let compatibility = InputCompatibility {
