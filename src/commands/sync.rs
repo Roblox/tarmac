@@ -109,8 +109,7 @@ struct SyncInput {
 
 impl SyncInput {
     pub fn is_unchanged_since_last_sync(&self, old_manifest: &InputManifest) -> bool {
-        old_manifest.hash.as_ref() == Some(&self.hash)
-            && self.config.packable == old_manifest.packable
+        self.hash == old_manifest.hash && self.config.packable == old_manifest.packable
     }
 }
 
@@ -442,7 +441,7 @@ impl SyncSession {
             // the current state with the previous one to see if we need to take
             // action.
 
-            if input_manifest.hash.as_ref() != Some(&input.hash) {
+            if input_manifest.hash != input.hash {
                 // The file's contents have been edited since the last sync.
 
                 log::trace!("Contents changed...");
@@ -555,7 +554,7 @@ impl SyncSession {
                 (
                     name.clone(),
                     InputManifest {
-                        hash: Some(input.hash.clone()),
+                        hash: input.hash.clone(),
                         id: input.id,
                         slice: input.slice,
                         packable: input.config.packable,

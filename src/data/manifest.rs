@@ -47,7 +47,7 @@ impl Manifest {
 pub struct InputManifest {
     /// The hexadecimal encoded hash of the contents of this input the last time
     /// it was part of an upload.
-    pub hash: Option<String>,
+    pub hash: String,
 
     /// The asset ID that contains this input the last time it was uploaded.
     pub id: Option<u64>,
