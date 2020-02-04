@@ -85,7 +85,7 @@ struct SyncSession {
     original_manifest: Manifest,
 
     /// All of the inputs discovered so far in the current sync.
-    inputs: HashMap<AssetName, SyncInput>,
+    inputs: BTreeMap<AssetName, SyncInput>,
 }
 
 #[derive(Debug)]
@@ -113,6 +113,13 @@ impl SyncInput {
     }
 }
 
+/// Contains information to help Tarmac batch process different kinds of assets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct InputKind {
+    packable: bool,
+    dpi_scale: u32,
+}
+
 impl SyncSession {
     fn new(fuzzy_config_path: &Path) -> Result<Self, Error> {
         log::trace!("Starting new sync session");
@@ -131,7 +138,7 @@ impl SyncSession {
         Ok(Self {
             configs: vec![root_config],
             original_manifest,
-            inputs: HashMap::new(),
+            inputs: BTreeMap::new(),
         })
     }
 
@@ -276,29 +283,30 @@ impl SyncSession {
     }
 
     fn sync<S: SyncBackend>(&mut self, strategy: &mut S) -> Result<(), Error> {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        struct InputCompatibility {
-            packable: bool,
-            dpi_scale: u32,
-        }
-
         let mut compatible_input_groups = BTreeMap::new();
 
         for (input_name, input) in &self.inputs {
-            let compatibility = InputCompatibility {
+            if !is_image_asset(&input.path) {
+                log::warn!(
+                    "Asset '{}' is not recognized by Tarmac.",
+                    input.path.display()
+                );
+
+                continue;
+            }
+
+            let kind = InputKind {
                 packable: input.config.packable,
                 dpi_scale: dpi_scale_for_path(&input.path),
             };
 
-            let input_group = compatible_input_groups
-                .entry(compatibility)
-                .or_insert_with(Vec::new);
+            let input_group = compatible_input_groups.entry(kind).or_insert_with(Vec::new);
 
             input_group.push(input_name.clone());
         }
 
-        for (compatibility, group) in compatible_input_groups {
-            if compatibility.packable {
+        for (kind, group) in compatible_input_groups {
+            if kind.packable {
                 let spritesheets = self.pack_images(group)?;
 
                 for (contents, spritesheet) in spritesheets {
@@ -306,15 +314,7 @@ impl SyncSession {
                 }
             } else {
                 for input_name in group {
-                    let input = self.inputs.get(&input_name).unwrap();
-
-                    log::trace!("Syncing {}", &input_name);
-
-                    if is_image_asset(&input.path) {
-                        self.sync_unpackable_image(strategy, &input_name)?;
-                    } else {
-                        log::warn!("Didn't know what to do with asset {}", input.path.display());
-                    }
+                    self.sync_unpackable_image(strategy, &input_name)?;
                 }
             }
         }
