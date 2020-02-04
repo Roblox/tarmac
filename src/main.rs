@@ -8,7 +8,6 @@ mod glob;
 mod image;
 mod options;
 mod roblox_web_api;
-mod spritesheet;
 mod sync_backend;
 
 use std::{error::Error, process};

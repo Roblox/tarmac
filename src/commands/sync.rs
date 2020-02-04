@@ -19,7 +19,6 @@ use crate::{
     image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::RobloxApiClient,
-    spritesheet::Spritesheet,
     sync_backend::{
         ContentSyncBackend, DebugSyncBackend, Error as SyncBackendError, RobloxSyncBackend,
         SyncBackend, UploadInfo,
@@ -118,6 +117,11 @@ impl SyncInput {
 struct InputKind {
     packable: bool,
     dpi_scale: u32,
+}
+
+struct PackedImage {
+    image: Image,
+    slices: HashMap<AssetName, ImageSlice>,
 }
 
 impl SyncSession {
@@ -282,7 +286,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync<S: SyncBackend>(&mut self, strategy: &mut S) -> Result<(), Error> {
+    fn sync<S: SyncBackend>(&mut self, backend: &mut S) -> Result<(), Error> {
         let mut compatible_input_groups = BTreeMap::new();
 
         for (input_name, input) in &self.inputs {
@@ -307,14 +311,10 @@ impl SyncSession {
 
         for (kind, group) in compatible_input_groups {
             if kind.packable {
-                let spritesheets = self.pack_images(group)?;
-
-                for (contents, spritesheet) in spritesheets {
-                    self.sync_packed_image(strategy, contents, &spritesheet)?;
-                }
+                self.sync_packable_images(backend, group)?;
             } else {
                 for input_name in group {
-                    self.sync_unpackable_image(strategy, &input_name)?;
+                    self.sync_unpackable_image(backend, &input_name)?;
                 }
             }
         }
@@ -325,102 +325,129 @@ impl SyncSession {
         Ok(())
     }
 
-    fn pack_images(
+    fn sync_packable_images<S: SyncBackend>(
         &mut self,
-        mut input_group: Vec<AssetName>,
-    ) -> Result<Vec<(Vec<u8>, Spritesheet)>, SyncError> {
-        log::info!("Packing {} compatible images", input_group.len());
+        backend: &mut S,
+        group: Vec<AssetName>,
+    ) -> Result<(), SyncError> {
+        if self.are_inputs_unchanged(&group) {
+            log::info!("Skipping image packing as all inputs are unchanged.");
 
-        // First, sort the inputs to make sure they're' always processed in a
-        // consistent order. This makes sure we avoid generating different
-        // spritesheets with the same input sprites.
-        input_group.sort();
+            for name in &group {
+                let input = self.inputs.get_mut(name).unwrap();
+                let manifest = &self.original_manifest.inputs[name];
 
-        log::trace!("Checking if any inputs changed");
+                input.id = manifest.id;
+                input.slice = manifest.slice;
+            }
 
-        let unchanged = input_group.iter().all(|name| {
-            let input_manifest = self.original_manifest.inputs.get(name);
+            return Ok(());
+        }
 
-            if let Some(manifest) = input_manifest {
+        log::trace!("Packing images...");
+        let packed_images = self.pack_images(&group)?;
+
+        // TODO: Alpha-bleed packed images here
+
+        log::trace!("Syncing packed images...");
+        for packed_image in &packed_images {
+            self.sync_packed_image(backend, packed_image)?;
+        }
+
+        Ok(())
+    }
+
+    fn are_inputs_unchanged(&self, group: &[AssetName]) -> bool {
+        for name in group {
+            if let Some(manifest) = self.original_manifest.inputs.get(name) {
                 let input = &self.inputs[name];
                 let unchanged = input.is_unchanged_since_last_sync(manifest);
 
                 if !unchanged {
                     log::trace!("Input {} changed since last sync", name);
-                }
 
-                unchanged
+                    return false;
+                }
             } else {
                 log::trace!(
                     "Input {} was not present last sync, need to re-pack spritesheets",
                     name
                 );
 
-                false
+                return false;
             }
-        });
-
-        if unchanged {
-            log::info!("All inputs are unchanged; no need to pack spritesheets");
-            return Ok(Vec::new());
         }
 
+        true
+    }
+
+    fn pack_images(&self, group: &[AssetName]) -> Result<Vec<PackedImage>, SyncError> {
         let mut packos_inputs = Vec::new();
         let mut images_by_id = HashMap::new();
 
-        for name in input_group {
+        for name in group {
             let input = &self.inputs[&name];
             let image = Image::decode_png(input.contents.as_slice()).context(error::PngDecode)?;
 
             let input = InputItem::new(image.size());
-            images_by_id.insert(input.id(), (name, image));
 
+            images_by_id.insert(input.id(), (name, image));
             packos_inputs.push(input);
         }
 
-        let max_size = self.root_config().max_spritesheet_size;
+        let packer = SimplePacker::new()
+            .max_size(self.root_config().max_spritesheet_size)
+            .padding(1);
 
-        let packer = SimplePacker::new().max_size(max_size).padding(1);
         let pack_results = packer.pack(packos_inputs);
+        let mut packed_images = Vec::new();
 
-        log::info!("Generated {} spritesheets", pack_results.buckets().len());
+        for bucket in pack_results.buckets() {
+            let mut image = Image::new_empty_rgba8(bucket.size());
+            let mut slices: HashMap<AssetName, _> = HashMap::new();
 
-        pack_results
-            .buckets()
-            .iter()
-            .map(|bucket| {
-                let mut sheet_image = Image::new_empty_rgba8(bucket.size());
+            for item in bucket.items() {
+                let (name, sprite_image) = &images_by_id[&item.id()];
 
-                for item in bucket.items() {
-                    let (_, image) = &images_by_id[&item.id()];
+                image.blit(sprite_image, item.position());
 
-                    sheet_image.blit(image, item.position());
-                }
+                let slice = ImageSlice::new(item.position(), item.max());
+                slices.insert((*name).clone(), slice);
+            }
 
-                let mut contents = Vec::new();
-                sheet_image
-                    .encode_png(&mut contents)
-                    .context(error::PngEncode)?;
+            packed_images.push(PackedImage { image, slices });
+        }
 
-                let slices = bucket
-                    .items()
-                    .iter()
-                    .map(|item| {
-                        let (asset_name, _) = &images_by_id[&item.id()];
-                        let slice = ImageSlice::new(item.position(), item.max());
+        Ok(packed_images)
+    }
 
-                        (asset_name.clone(), slice)
-                    })
-                    .collect();
+    fn sync_packed_image<S: SyncBackend>(
+        &mut self,
+        backend: &mut S,
+        packed_image: &PackedImage,
+    ) -> Result<(), SyncError> {
+        let mut encoded_image = Vec::new();
+        packed_image.image.encode_png(&mut encoded_image)?;
 
-                let spritesheet = Spritesheet {
-                    dimensions: bucket.size(),
-                    slices,
-                };
+        let hash = generate_asset_hash(&encoded_image);
 
-                Ok((contents, spritesheet))
-            })
-            .collect()
+        let upload_data = UploadInfo {
+            name: AssetName::spritesheet(),
+            contents: encoded_image,
+            hash: hash.clone(),
+        };
+
+        let id = backend.upload(upload_data)?.id;
+
+        // Apply resolved metadata back to the inputs
+        for (asset_name, slice) in &packed_image.slices {
+            let input = self.inputs.get_mut(asset_name).unwrap();
+
+            input.id = Some(id);
+            input.slice = Some(*slice);
+        }
+
+        Ok(())
     }
 
     fn sync_unpackable_image<S: SyncBackend>(
@@ -485,59 +512,6 @@ impl SyncSession {
         };
 
         input.id = Some(id);
-
-        Ok(())
-    }
-
-    fn sync_packed_image<S: SyncBackend>(
-        &mut self,
-        strategy: &mut S,
-        contents: Vec<u8>,
-        packed_image: &Spritesheet,
-    ) -> Result<(), Error> {
-        let mut slices = packed_image.slices();
-        let (first_asset, _) = slices.next().unwrap();
-        let first_input = self.inputs.get(first_asset).unwrap();
-
-        // If there's an existing id that lines up with all of the inputs in the
-        // spritesheet, we don't need to upload and we can short-circuit
-        let existing_id = first_input.id.and_then(|id| {
-            for (asset_name, _) in slices {
-                let input = self.inputs.get(asset_name).unwrap();
-                if input.id != Some(id) {
-                    return None;
-                }
-            }
-
-            Some(id)
-        });
-
-        if let Some(id) = existing_id {
-            log::info!("Asset id {} has already been uploaded", id);
-            return Ok(());
-        }
-
-        // TODO: Do we need to save the hash of entire spritesheet contents so
-        // we can avoid re-uploading an identical spritesheet? Or can we get by
-        // with the above check?
-
-        let hash = generate_asset_hash(contents.as_ref());
-
-        let upload_data = UploadInfo {
-            name: AssetName::spritesheet(),
-            contents,
-            hash: hash.clone(),
-        };
-
-        let id = strategy.upload(upload_data)?.id;
-
-        // Apply resolved metadata back to the inputs
-        for (asset_name, slice) in packed_image.slices() {
-            let input = self.inputs.get_mut(asset_name).unwrap();
-
-            input.id = Some(id);
-            input.slice = Some(slice.to_owned());
-        }
 
         Ok(())
     }
@@ -705,6 +679,12 @@ mod error {
         PngEncode {
             source: png::EncodingError,
         },
+    }
+
+    impl From<png::EncodingError> for Error {
+        fn from(source: png::EncodingError) -> Self {
+            Self::PngEncode { source }
+        }
     }
 
     impl From<SyncBackendError> for Error {
