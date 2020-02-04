@@ -93,8 +93,7 @@ struct SyncInput {
     /// The path on disk to the file containing this input.
     path: PathBuf,
 
-    /// An index into SyncSession::configs representing the config that applies
-    /// to this input.
+    /// The configuration that applied to this input when it was discovered.
     config: InputConfig,
 
     /// The content hash associated with the input, if we've calculated it.
@@ -334,14 +333,29 @@ impl SyncSession {
         // spritesheets with the same input sprites.
         input_group.sort();
 
+        // Read every image in the group into memory. We'll need them in their
+        // undecoded form for hashing and later in their decoded form if we
+        // decide we need to re-pack one or more spritesheets.
+        let contents_by_name = input_group
+            .iter()
+            .map(|name| {
+                let name = name.clone();
+
+                let input = self.inputs.get(&name).unwrap();
+                let path = &input.path;
+                let contents = fs::read(path).context(error::Io { path })?;
+
+                Ok((name, contents))
+            })
+            .collect::<Result<HashMap<AssetName, Vec<u8>>, SyncError>>()?;
+
         // For each asset in this group, compute the hash of its content; we can
         // use this to verify whether or not any of the images have changed
         let mut unchanged = true;
         for asset_name in input_group.iter() {
             let input = self.inputs.get_mut(asset_name).unwrap();
-            let path = input.path.as_path();
-            let contents = fs::read(path).context(error::Io { path })?;
 
+            let contents = &contents_by_name[asset_name];
             input.hash = Some(generate_asset_hash(contents.as_ref()));
 
             // Once the hash is computed, compare with the manifest's hash to
@@ -370,11 +384,8 @@ impl SyncSession {
         let mut images_by_id = HashMap::new();
 
         for asset_name in input_group {
-            // Build a png decoder for the given file
-            let path = self.inputs.get(&asset_name).unwrap().path.as_path();
-            let image_file = fs::File::open(path).context(error::Io { path })?;
-
-            let image = Image::decode_png(image_file).context(error::PngDecode)?;
+            let contents = &contents_by_name[&asset_name];
+            let image = Image::decode_png(contents.as_slice()).context(error::PngDecode)?;
 
             let input = InputItem::new(image.size());
             images_by_id.insert(input.id(), (asset_name.clone(), image));
