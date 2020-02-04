@@ -96,8 +96,8 @@ struct SyncInput {
     /// The configuration that applied to this input when it was discovered.
     config: InputConfig,
 
-    /// The content hash associated with the input, if we've calculated it.
-    hash: Option<String>,
+    contents: Vec<u8>,
+    hash: String,
 
     /// The asset ID of this input the last time it was uploaded.
     id: Option<u64>,
@@ -109,9 +109,8 @@ struct SyncInput {
 
 impl SyncInput {
     pub fn is_unchanged_since_last_sync(&self, old_manifest: &InputManifest) -> bool {
-        assert!(self.hash.is_some());
-
-        self.hash == old_manifest.hash && self.config.packable == old_manifest.packable
+        old_manifest.hash.as_ref() == Some(&self.hash)
+            && self.config.packable == old_manifest.packable
     }
 }
 
@@ -245,15 +244,21 @@ impl SyncSession {
                     });
 
                 for matching in filtered_paths {
-                    let name = AssetName::from_paths(config_path, matching.path());
+                    let path = matching.into_path();
+
+                    let name = AssetName::from_paths(config_path, &path);
                     log::trace!("Found input {}", name);
+
+                    let contents = fs::read(&path).context(error::Io { path: &path })?;
+                    let hash = generate_asset_hash(&contents);
 
                     let already_found = inputs.insert(
                         name,
                         SyncInput {
-                            path: matching.into_path(),
+                            path,
                             config: input_config.clone(),
-                            hash: None,
+                            contents,
+                            hash,
                             id: None,
                             slice: None,
                         },
@@ -332,33 +337,6 @@ impl SyncSession {
         // spritesheets with the same input sprites.
         input_group.sort();
 
-        log::trace!("Reading input contents");
-
-        // Read every image in the group into memory. We'll need them in their
-        // undecoded form for hashing and later in their decoded form if we
-        // decide we need to re-pack one or more spritesheets.
-        let contents_by_name = input_group
-            .iter()
-            .map(|name| {
-                let input = &self.inputs[name];
-                let path = &input.path;
-
-                let name = name.clone();
-                let contents = fs::read(path).context(error::Io { path })?;
-
-                Ok((name, contents))
-            })
-            .collect::<Result<HashMap<AssetName, Vec<u8>>, SyncError>>()?;
-
-        log::trace!("Calculating input hashes");
-
-        // Assign content hashes to each input based on their contents.
-        for name in &input_group {
-            let input = self.inputs.get_mut(name).unwrap();
-            let contents = &contents_by_name[name];
-            input.hash = Some(generate_asset_hash(contents.as_ref()));
-        }
-
         log::trace!("Checking if any inputs changed");
 
         let unchanged = input_group.iter().all(|name| {
@@ -391,12 +369,12 @@ impl SyncSession {
         let mut packos_inputs = Vec::new();
         let mut images_by_id = HashMap::new();
 
-        for asset_name in input_group {
-            let contents = &contents_by_name[&asset_name];
-            let image = Image::decode_png(contents.as_slice()).context(error::PngDecode)?;
+        for name in input_group {
+            let input = &self.inputs[&name];
+            let image = Image::decode_png(input.contents.as_slice()).context(error::PngDecode)?;
 
             let input = InputItem::new(image.size());
-            images_by_id.insert(input.id(), (asset_name.clone(), image));
+            images_by_id.insert(input.id(), (name, image));
 
             packos_inputs.push(input);
         }
@@ -452,15 +430,11 @@ impl SyncSession {
         input_name: &AssetName,
     ) -> Result<(), Error> {
         let input = self.inputs.get_mut(input_name).unwrap();
-        let contents = fs::read(&input.path).context(error::Io { path: &input.path })?;
-        let hash = generate_asset_hash(&contents);
-
-        input.hash = Some(hash.clone());
 
         let upload_data = UploadInfo {
             name: input_name.clone(),
-            contents,
-            hash: hash.clone(),
+            contents: input.contents.clone(),
+            hash: input.hash.clone(),
         };
 
         let id = if let Some(input_manifest) = self.original_manifest.inputs.get(&input_name) {
@@ -468,7 +442,7 @@ impl SyncSession {
             // the current state with the previous one to see if we need to take
             // action.
 
-            if input_manifest.hash.as_ref() != Some(&hash) {
+            if input_manifest.hash.as_ref() != Some(&input.hash) {
                 // The file's contents have been edited since the last sync.
 
                 log::trace!("Contents changed...");
@@ -581,7 +555,7 @@ impl SyncSession {
                 (
                     name.clone(),
                     InputManifest {
-                        hash: input.hash.clone(),
+                        hash: Some(input.hash.clone()),
                         id: input.id,
                         slice: input.slice,
                         packable: input.config.packable,
