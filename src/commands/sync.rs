@@ -108,11 +108,10 @@ struct SyncInput {
 }
 
 impl SyncInput {
-    pub fn matches_manifest(&self, manifest: &InputManifest) -> bool {
-        self.hash.is_some()
-            && self.hash == manifest.hash
-            && self.config.packable == manifest.packable
-            && self.config.codegen == manifest.codegen
+    pub fn is_unchanged_since_last_sync(&self, old_manifest: &InputManifest) -> bool {
+        assert!(self.hash.is_some());
+
+        self.hash == old_manifest.hash && self.config.packable == old_manifest.packable
     }
 }
 
@@ -333,50 +332,59 @@ impl SyncSession {
         // spritesheets with the same input sprites.
         input_group.sort();
 
+        log::trace!("Reading input contents");
+
         // Read every image in the group into memory. We'll need them in their
         // undecoded form for hashing and later in their decoded form if we
         // decide we need to re-pack one or more spritesheets.
         let contents_by_name = input_group
             .iter()
             .map(|name| {
-                let name = name.clone();
-
-                let input = self.inputs.get(&name).unwrap();
+                let input = &self.inputs[name];
                 let path = &input.path;
+
+                let name = name.clone();
                 let contents = fs::read(path).context(error::Io { path })?;
 
                 Ok((name, contents))
             })
             .collect::<Result<HashMap<AssetName, Vec<u8>>, SyncError>>()?;
 
-        // For each asset in this group, compute the hash of its content; we can
-        // use this to verify whether or not any of the images have changed
-        let mut unchanged = true;
-        for asset_name in input_group.iter() {
-            let input = self.inputs.get_mut(asset_name).unwrap();
+        log::trace!("Calculating input hashes");
 
-            let contents = &contents_by_name[asset_name];
+        // Assign content hashes to each input based on their contents.
+        for name in &input_group {
+            let input = self.inputs.get_mut(name).unwrap();
+            let contents = &contents_by_name[name];
             input.hash = Some(generate_asset_hash(contents.as_ref()));
-
-            // Once the hash is computed, compare with the manifest's hash to
-            // determine if we have any changed inputs
-            let input_manifest = self.original_manifest.inputs.get(asset_name);
-            let matches_manifest = input_manifest
-                .map(|manifest| input.matches_manifest(manifest))
-                .unwrap_or(false);
-
-            // If the input in question has an id and matches the input
-            // manifest, then we may not need to spritesheet it
-            unchanged &= input.id.is_some() && matches_manifest;
-
-            // TODO: Make sure this aligns with the content folder upload
-            // strategy; particularly, when we may not have uploaded but have
-            // already generated a spritesheet and put it somewhere
         }
 
-        // If none of the input images have changed, we can short-circuit here
+        log::trace!("Checking if any inputs changed");
+
+        let unchanged = input_group.iter().all(|name| {
+            let input_manifest = self.original_manifest.inputs.get(name);
+
+            if let Some(manifest) = input_manifest {
+                let input = &self.inputs[name];
+                let unchanged = input.is_unchanged_since_last_sync(manifest);
+
+                if !unchanged {
+                    log::trace!("Input {} changed since last sync", name);
+                }
+
+                unchanged
+            } else {
+                log::trace!(
+                    "Input {} was not present last sync, need to re-pack spritesheets",
+                    name
+                );
+
+                false
+            }
+        });
+
         if unchanged {
-            log::info!("All input images are unchanged; no need to pack spritesheets");
+            log::info!("All inputs are unchanged; no need to pack spritesheets");
             return Ok(Vec::new());
         }
 
