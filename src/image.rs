@@ -15,6 +15,20 @@ impl ImageFormat {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Pixel {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl Pixel {
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self { r, g, b, a }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Image {
     size: (u32, u32),
@@ -96,6 +110,34 @@ impl Image {
             self_row.copy_from_slice(other_row);
         }
     }
+
+    pub fn get_pixel(&self, pos: (u32, u32)) -> Pixel {
+        assert!(pos.0 < self.size.0);
+        assert!(pos.1 < self.size.1);
+
+        let stride = self.format.stride() as usize;
+        let start = stride * (pos.0 + pos.1 * self.size.0) as usize;
+
+        Pixel {
+            r: self.data[start],
+            g: self.data[start + 1],
+            b: self.data[start + 2],
+            a: self.data[start + 3],
+        }
+    }
+
+    pub fn set_pixel(&mut self, pos: (u32, u32), pixel: Pixel) {
+        assert!(pos.0 < self.size.0);
+        assert!(pos.1 < self.size.1);
+
+        let stride = self.format.stride() as usize;
+        let start = stride * (pos.0 + pos.1 * self.size.0) as usize;
+
+        self.data[start] = pixel.r;
+        self.data[start + 1] = pixel.g;
+        self.data[start + 2] = pixel.b;
+        self.data[start + 3] = pixel.a;
+    }
 }
 
 #[cfg(test)]
@@ -116,5 +158,27 @@ mod test {
         let mut target = Image::new_empty_rgba8((8, 8));
 
         target.blit(&source, (4, 4));
+    }
+
+    #[test]
+    fn get_pixel() {
+        let source = Image::new_empty_rgba8((4, 4));
+
+        assert_eq!(source.get_pixel((0, 0)), Pixel::new(0, 0, 0, 0));
+        assert_eq!(source.get_pixel((3, 3)), Pixel::new(0, 0, 0, 0));
+    }
+
+    #[test]
+    fn set_pixel() {
+        let mut source = Image::new_empty_rgba8((3, 3));
+
+        source.set_pixel((0, 0), Pixel::new(1, 2, 3, 4));
+        assert_eq!(source.get_pixel((0, 0)), Pixel::new(1, 2, 3, 4));
+
+        source.set_pixel((2, 2), Pixel::new(5, 6, 7, 8));
+        assert_eq!(source.get_pixel((2, 2)), Pixel::new(5, 6, 7, 8));
+
+        assert_eq!(&source.data[0..4], &[1, 2, 3, 4]);
+        assert_eq!(&source.data[(source.data.len() - 4)..], &[5, 6, 7, 8]);
     }
 }
