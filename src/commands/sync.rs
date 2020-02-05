@@ -11,6 +11,7 @@ use snafu::ResultExt;
 use walkdir::WalkDir;
 
 use crate::{
+    alpha_bleed::alpha_bleed,
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
     codegen::{AssetUrlTemplate, UrlAndSliceTemplate},
@@ -345,9 +346,15 @@ impl SyncSession {
         }
 
         log::trace!("Packing images...");
-        let packed_images = self.pack_images(&group)?;
+        let mut packed_images = self.pack_images(&group)?;
 
-        // TODO: Alpha-bleed packed images here
+        log::trace!("Alpha-bleeding {} packed images...", packed_images.len());
+
+        for (i, packed_image) in packed_images.iter_mut().enumerate() {
+            log::trace!("Bleeding image {}", i);
+
+            alpha_bleed(&mut packed_image.image);
+        }
 
         log::trace!("Syncing packed images...");
         for packed_image in &packed_images {
