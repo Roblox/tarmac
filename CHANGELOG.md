@@ -1,5 +1,8 @@
 # Tarmac Changelog
 
+## Unreleased Changes
+* Tarmac now "alpha-bleeds" packed image spritesheets to prevent artifacts from appearing when resized in Roblox.
+
 ## 0.3.1 (2020-02-04)
 * Fixed `tarmac sync` sometimes re-uploading more images than it should. ([#19](https://github.com/rojo-rbx/tarmac/pull/19))
 * Updated `tarmac-manifest.toml` to require hashes. This might cause errors when upgrading to 0.3.1; they can be fixed by deleting your manifest and syncing again.
