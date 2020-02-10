@@ -40,6 +40,12 @@ impl AssetName {
     pub fn spritesheet() -> Self {
         AssetName("spritesheet.png".into())
     }
+
+    /// An iterator over the list of slash-delimited components comprising this
+    /// name.
+    pub fn components(&self) -> impl Iterator<Item = &str> {
+        self.0.split('/')
+    }
 }
 
 impl AsRef<str> for AssetName {
