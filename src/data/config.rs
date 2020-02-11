@@ -94,11 +94,13 @@ pub struct InputConfig {
 
     /// What kind of extra links Tarmac should generate when these assets are
     /// consumed in a project.
-    ///
-    /// These links can be used by code located near the affected assets to
-    /// import them dynamically as if they were normal Lua modules.
     #[serde(default)]
     pub codegen: CodegenKind,
+
+    /// If specified, batches together all of the generated code for this group
+    /// of inputs into a single file created at this path.
+    #[serde(default)]
+    pub codegen_path: CodegenPath,
 
     /// Whether the assets affected by this config are allowed to be packed into
     /// spritesheets.
@@ -109,6 +111,19 @@ pub struct InputConfig {
     /// instances.
     #[serde(default)]
     pub packable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged, rename_all = "kebab-case")]
+pub enum CodegenPath {
+    Ungrouped,
+    Grouped(PathBuf),
+}
+
+impl Default for CodegenPath {
+    fn default() -> Self {
+        Self::Ungrouped
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

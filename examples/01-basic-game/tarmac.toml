@@ -14,3 +14,4 @@ glob = "assets/**/*.png"
 # Tells Tarmac what kind of link files to generate.
 # This option creates `ModuleScript` instances that return asset URLs.
 codegen = "asset-url"
+codegen-path = "src/assets.lua"

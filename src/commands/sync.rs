@@ -3,7 +3,7 @@ use std::{
     env,
     fs::{self, File},
     io::Write,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use packos::{InputItem, SimplePacker};
@@ -15,7 +15,7 @@ use crate::{
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
     codegen::{AssetUrlTemplate, UrlAndSliceTemplate},
-    data::{CodegenKind, Config, ImageSlice, InputConfig, InputManifest, Manifest},
+    data::{CodegenKind, Config, ImageSlice, InputManifest, Manifest, SyncInput},
     dpi_scale::dpi_scale_for_path,
     image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
@@ -86,31 +86,6 @@ struct SyncSession {
 
     /// All of the inputs discovered so far in the current sync.
     inputs: BTreeMap<AssetName, SyncInput>,
-}
-
-#[derive(Debug)]
-struct SyncInput {
-    /// The path on disk to the file containing this input.
-    path: PathBuf,
-
-    /// The configuration that applied to this input when it was discovered.
-    config: InputConfig,
-
-    contents: Vec<u8>,
-    hash: String,
-
-    /// The asset ID of this input the last time it was uploaded.
-    id: Option<u64>,
-
-    /// If the asset is an image that was packed into a spritesheet, contains
-    /// the portion of the uploaded image that contains this input.
-    slice: Option<ImageSlice>,
-}
-
-impl SyncInput {
-    pub fn is_unchanged_since_last_sync(&self, old_manifest: &InputManifest) -> bool {
-        self.hash == old_manifest.hash && self.config.packable == old_manifest.packable
-    }
 }
 
 /// Contains information to help Tarmac batch process different kinds of assets.
