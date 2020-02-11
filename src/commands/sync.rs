@@ -48,18 +48,18 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
     match options.target {
         SyncTarget::Roblox => {
             let api_client = api_client.as_mut().ok_or(Error::NoAuth)?;
-            let mut strategy = RobloxSyncBackend::new(api_client);
+            let mut backend = RobloxSyncBackend::new(api_client);
 
-            session.sync(&mut strategy)?;
+            session.sync_with_backend(&mut backend)?;
         }
         SyncTarget::ContentFolder => {
-            let mut strategy = ContentSyncBackend {};
+            let mut backend = ContentSyncBackend {};
 
-            session.sync(&mut strategy)?;
+            session.sync_with_backend(&mut backend)?;
         }
         SyncTarget::Debug => {
-            let mut strategy = DebugSyncBackend::new();
-            session.sync(&mut strategy)?;
+            let mut backend = DebugSyncBackend::new();
+            session.sync_with_backend(&mut backend)?;
         }
     }
 
@@ -262,7 +262,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync<S: SyncBackend>(&mut self, backend: &mut S) -> Result<(), Error> {
+    fn sync_with_backend<S: SyncBackend>(&mut self, backend: &mut S) -> Result<(), Error> {
         let mut compatible_input_groups = BTreeMap::new();
 
         for (input_name, input) in &self.inputs {
@@ -434,7 +434,7 @@ impl SyncSession {
 
     fn sync_unpackable_image<S: SyncBackend>(
         &mut self,
-        strategy: &mut S,
+        backend: &mut S,
         input_name: &AssetName,
     ) -> Result<(), Error> {
         let input = self.inputs.get_mut(input_name).unwrap();
@@ -455,7 +455,7 @@ impl SyncSession {
 
                 log::trace!("Contents changed...");
 
-                strategy.upload(upload_data)?.id
+                backend.upload(upload_data)?.id
             } else if let Some(prev_id) = input_manifest.id {
                 // The file's contents are the same as the previous sync and
                 // this image has been uploaded previously.
@@ -469,7 +469,7 @@ impl SyncSession {
 
                     log::trace!("Config changed...");
 
-                    strategy.upload(upload_data)?.id
+                    backend.upload(upload_data)?.id
                 } else {
                     // Nothing has changed, we're good to go!
 
@@ -483,14 +483,14 @@ impl SyncSession {
 
                 log::trace!("Image has never been uploaded...");
 
-                strategy.upload(upload_data)?.id
+                backend.upload(upload_data)?.id
             }
         } else {
             // This input was added since the last sync, if there was one.
 
             log::trace!("Image was added since last sync...");
 
-            strategy.upload(upload_data)?.id
+            backend.upload(upload_data)?.id
         };
 
         input.id = Some(id);
