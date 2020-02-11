@@ -46,7 +46,7 @@ impl FmtLua for Block {
 proxy_display!(Block);
 
 pub(crate) enum Statement {
-    Return(Literal),
+    Return(Expression),
 }
 
 impl FmtLua for Statement {
@@ -60,16 +60,24 @@ impl FmtLua for Statement {
     }
 }
 
-pub(crate) enum Literal {
+pub(crate) enum Expression {
     String(String),
-    Table(TableLiteral),
+    Table(Table),
+    Raw(String),
 }
 
-impl FmtLua for Literal {
+impl Expression {
+    pub fn table(entries: Vec<(Expression, Expression)>) -> Self {
+        Self::Table(Table { entries })
+    }
+}
+
+impl FmtLua for Expression {
     fn fmt_lua(&self, output: &mut LuaStream<'_>) -> fmt::Result {
         match self {
             Self::Table(inner) => inner.fmt_lua(output),
             Self::String(inner) => inner.fmt_lua(output),
+            Self::Raw(inner) => output.write_str(inner),
         }
     }
 
@@ -77,24 +85,25 @@ impl FmtLua for Literal {
         match self {
             Self::Table(inner) => inner.fmt_table_key(output),
             Self::String(inner) => inner.fmt_table_key(output),
+            Self::Raw(inner) => output.write_str(inner),
         }
     }
 }
 
-impl From<String> for Literal {
+impl From<String> for Expression {
     fn from(value: String) -> Self {
         Self::String(value)
     }
 }
 
-impl From<&'_ str> for Literal {
+impl From<&'_ str> for Expression {
     fn from(value: &str) -> Self {
         Self::String(value.to_owned())
     }
 }
 
-impl From<TableLiteral> for Literal {
-    fn from(value: TableLiteral) -> Self {
+impl From<Table> for Expression {
+    fn from(value: Table) -> Self {
         Self::Table(value)
     }
 }
@@ -113,11 +122,23 @@ impl FmtLua for String {
     }
 }
 
-pub(crate) struct TableLiteral {
-    pub entries: Vec<(Literal, Literal)>,
+pub(crate) struct Table {
+    pub entries: Vec<(Expression, Expression)>,
 }
 
-impl FmtLua for TableLiteral {
+impl Table {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    pub fn add_entry<K: Into<Expression>, V: Into<Expression>>(&mut self, key: K, value: V) {
+        self.entries.push((key.into(), value.into()));
+    }
+}
+
+impl FmtLua for Table {
     fn fmt_lua(&self, output: &mut LuaStream<'_>) -> fmt::Result {
         writeln!(output, "{{")?;
         output.indent();

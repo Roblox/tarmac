@@ -7,7 +7,7 @@ use std::{collections::HashMap, fmt};
 use crate::{
     asset_name::AssetName,
     data::ImageSlice,
-    lua_ast::{Block, Literal, Statement, TableLiteral},
+    lua_ast::{Block, Expression, Statement, Table},
 };
 
 const CODEGEN_HEADER: &str =
@@ -56,7 +56,7 @@ impl fmt::Display for TestBatchTemplate {
 
         writeln!(formatter, "{}", CODEGEN_HEADER)?;
 
-        fn build_item(item: &Item<'_>) -> Literal {
+        fn build_item(item: &Item<'_>) -> Expression {
             match item {
                 Item::Folder(children) => {
                     let entries = children
@@ -64,9 +64,9 @@ impl fmt::Display for TestBatchTemplate {
                         .map(|(&name, child)| (name.into(), build_item(child)))
                         .collect();
 
-                    Literal::Table(TableLiteral { entries })
+                    Expression::table(entries)
                 }
-                Item::Input(asset_name) => Literal::String(asset_name.to_string()),
+                Item::Input(asset_name) => Expression::String(asset_name.to_string()),
             }
         }
 
@@ -85,6 +85,12 @@ pub(crate) struct AssetUrlTemplate {
     pub id: u64,
 }
 
+impl AssetUrlTemplate {
+    fn to_lua(&self) -> Expression {
+        Expression::String(format!("rbxassetid://{}", self.id))
+    }
+}
+
 impl fmt::Display for AssetUrlTemplate {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         writeln!(formatter, "{}", CODEGEN_HEADER)?;
@@ -99,30 +105,40 @@ pub(crate) struct UrlAndSliceTemplate {
     pub slice: Option<ImageSlice>,
 }
 
-impl fmt::Display for UrlAndSliceTemplate {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(formatter, "{}", CODEGEN_HEADER)?;
+impl UrlAndSliceTemplate {
+    fn to_lua(&self) -> Expression {
+        let mut table = Table::new();
 
-        writeln!(formatter, "return {{")?;
-        writeln!(formatter, "\tImage = \"rbxassetid://{}\",", self.id)?;
+        table.add_entry("Image", format!("rbxassetid://{}", self.id));
 
         if let Some(slice) = self.slice {
             let offset = slice.min();
             let size = slice.size();
 
-            writeln!(
-                formatter,
-                "\tImageRectOffset = Vector2.new({}, {}),",
-                offset.0, offset.1
-            )?;
-            writeln!(
-                formatter,
-                "\tImageRectSize = Vector2.new({}, {}),",
-                size.0, size.1
-            )?;
+            table.add_entry(
+                "ImageRectOffset",
+                Expression::Raw(format!("Vector2.new({}, {})", offset.0, offset.1)),
+            );
+
+            table.add_entry(
+                "ImageRectSize",
+                Expression::Raw(format!("Vector2.new({}, {})", size.0, size.1)),
+            );
         }
 
-        writeln!(formatter, "}}")?;
+        Expression::Table(table)
+    }
+}
+
+impl fmt::Display for UrlAndSliceTemplate {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(formatter, "{}", CODEGEN_HEADER)?;
+
+        let ast = Block {
+            statements: vec![Statement::Return(self.to_lua())],
+        };
+
+        write!(formatter, "{}", ast)?;
 
         Ok(())
     }
