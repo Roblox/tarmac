@@ -46,6 +46,11 @@ impl AssetName {
     pub fn components(&self) -> impl Iterator<Item = &str> {
         self.0.split('/')
     }
+
+    #[cfg(test)]
+    pub(crate) fn new<S: AsRef<str>>(inner: S) -> Self {
+        Self(inner.as_ref().into())
+    }
 }
 
 impl AsRef<str> for AssetName {
