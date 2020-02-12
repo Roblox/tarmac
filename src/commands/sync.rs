@@ -1,9 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
-    env,
-    fs::{self, File},
-    io::Write,
-    path::Path,
+    env, fs,
+    path::{Path, PathBuf},
 };
 
 use packos::{InputItem, SimplePacker};
@@ -14,8 +12,8 @@ use crate::{
     alpha_bleed::alpha_bleed,
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
-    codegen::{AssetUrlTemplate, UrlAndSliceTemplate},
-    data::{CodegenKind, Config, ImageSlice, InputManifest, Manifest, SyncInput},
+    codegen::perform_codegen,
+    data::{Config, ImageSlice, InputManifest, Manifest, SyncInput},
     dpi_scale::dpi_scale_for_path,
     image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
@@ -239,8 +237,9 @@ impl SyncSession {
                     let hash = generate_asset_hash(&contents);
 
                     let already_found = inputs.insert(
-                        name,
+                        name.clone(),
                         SyncInput {
+                            name,
                             path,
                             config: input_config.clone(),
                             contents,
@@ -530,47 +529,35 @@ impl SyncSession {
     fn codegen(&self) -> Result<(), Error> {
         log::trace!("Starting codegen");
 
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        struct CodegenCompatibility<'a> {
+            output_path: Option<&'a Path>,
+        }
+
+        let mut compatible_codegen_groups = HashMap::new();
+
         for (input_name, input) in &self.inputs {
-            log::trace!(
-                "Using codegen '{:?}' for {}",
-                input.config.codegen,
-                input_name
-            );
+            let output_path = input
+                .config
+                .codegen_path
+                .as_ref()
+                .map(|path| path.as_path());
 
-            match input.config.codegen {
-                CodegenKind::None => {}
+            let compat = CodegenCompatibility { output_path };
 
-                CodegenKind::AssetUrl => {
-                    if let Some(id) = input.id {
-                        let template = AssetUrlTemplate { id };
+            let group = compatible_codegen_groups
+                .entry(compat)
+                .or_insert_with(Vec::new);
+            group.push(input_name.clone());
+        }
 
-                        let path = &input.path.with_extension("lua");
-                        let mut file = File::create(path).context(error::Io { path })?;
-                        write!(&mut file, "{}", template).context(error::Io { path })?;
+        for (compat, names) in compatible_codegen_groups {
+            let inputs: Vec<_> = names.iter().map(|name| &self.inputs[name]).collect();
+            let output_path = compat.output_path;
 
-                        log::trace!("Generated code at {}", path.display());
-                    } else {
-                        log::trace!("Skipping codegen because this input was not uploaded.");
-                    }
-                }
-
-                CodegenKind::UrlAndSlice => {
-                    if let Some(id) = input.id {
-                        let template = UrlAndSliceTemplate {
-                            id,
-                            slice: input.slice,
-                        };
-
-                        let path = &input.path.with_extension("lua");
-                        let mut file = File::create(path).context(error::Io { path })?;
-                        write!(&mut file, "{}", template).context(error::Io { path })?;
-
-                        log::trace!("Generated code at {}", path.display());
-                    } else {
-                        log::trace!("Skipping codegen because this input was not uploaded.");
-                    }
-                }
-            }
+            perform_codegen(output_path, &inputs).context(error::Io {
+                path: PathBuf::new(),
+            })?;
         }
 
         Ok(())

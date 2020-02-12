@@ -62,7 +62,7 @@ pub struct InputManifest {
 
     /// The kind of Lua code that was generated during the last sync for this
     /// input.
-    pub codegen: CodegenKind,
+    pub codegen: Option<CodegenKind>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

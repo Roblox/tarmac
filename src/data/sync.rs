@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use crate::data::{ImageSlice, InputConfig, InputManifest};
+use crate::{
+    asset_name::AssetName,
+    data::{ImageSlice, InputConfig, InputManifest},
+};
 
 /// In-memory representation of a Tarmac Input during the sync process.
 ///
@@ -8,6 +11,8 @@ use crate::data::{ImageSlice, InputConfig, InputManifest};
 /// results of network I/O, and from the previous Tarmac manifest file.
 #[derive(Debug)]
 pub struct SyncInput {
+    pub name: AssetName,
+
     /// The path on disk to the file this input originated from.
     pub path: PathBuf,
 

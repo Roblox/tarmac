@@ -95,12 +95,12 @@ pub struct InputConfig {
     /// What kind of extra links Tarmac should generate when these assets are
     /// consumed in a project.
     #[serde(default)]
-    pub codegen: CodegenKind,
+    pub codegen: Option<CodegenKind>,
 
     /// If specified, batches together all of the generated code for this group
     /// of inputs into a single file created at this path.
     #[serde(default)]
-    pub codegen_path: CodegenPath,
+    pub codegen_path: Option<PathBuf>,
 
     /// Whether the assets affected by this config are allowed to be packed into
     /// spritesheets.
@@ -113,28 +113,9 @@ pub struct InputConfig {
     pub packable: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged, rename_all = "kebab-case")]
-pub enum CodegenPath {
-    Ungrouped,
-    Grouped(PathBuf),
-}
-
-impl Default for CodegenPath {
-    fn default() -> Self {
-        Self::Ungrouped
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CodegenKind {
-    /// Emit no Lua files linking images to their assets.
-    ///
-    /// This option is useful if another tool is handling the asset mapping, or
-    /// assets don't need to be accessed programmatically.
-    None,
-
     /// Emit Lua files that return asset URLs as a string.
     ///
     /// This option is useful for images that will never be packed into a
@@ -151,12 +132,6 @@ pub enum CodegenKind {
     /// * `ImageRectOffset` (Vector2)
     /// * `ImageRectSize` (Vector2)
     UrlAndSlice,
-}
-
-impl Default for CodegenKind {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 #[derive(Debug, Snafu)]
