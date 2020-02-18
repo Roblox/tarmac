@@ -3,7 +3,7 @@
 //! Tarmac uses structs with `Display` impls to build up templates.
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fs::File,
     io::{self, Write},
     path::Path,
@@ -28,11 +28,11 @@ pub fn perform_codegen(output_path: Option<&Path>, inputs: &[&SyncInput]) -> io:
 
 fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> {
     enum Item<'a> {
-        Folder(HashMap<&'a str, Item<'a>>),
+        Folder(BTreeMap<&'a str, Item<'a>>),
         Input(&'a SyncInput),
     }
 
-    let mut indexed_items: HashMap<&str, Item<'_>> = HashMap::new();
+    let mut indexed_items: BTreeMap<&str, Item<'_>> = BTreeMap::new();
 
     for input in inputs {
         let mut components = input.name.components().peekable();
@@ -45,7 +45,7 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
             if has_more_components {
                 let next_entry = current_dir
                     .entry(name)
-                    .or_insert_with(|| Item::Folder(HashMap::new()));
+                    .or_insert_with(|| Item::Folder(BTreeMap::new()));
 
                 match next_entry {
                     Item::Folder(next_dir) => {
