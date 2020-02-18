@@ -10,6 +10,7 @@ packable = true
 # It's recommended to use a codegen strategy that includes spritesheet
 # information when dealing with packable images!
 codegen = "url-and-slice"
+codegen-path = "pack-these/init.lua"
 
 [[inputs]]
 glob = "dont-pack-these/**/*.png"
