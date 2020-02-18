@@ -5,6 +5,7 @@ mod codegen;
 mod commands;
 mod data;
 mod dpi_scale;
+mod fs;
 mod glob;
 mod image;
 mod lua_ast;

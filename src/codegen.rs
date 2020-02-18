@@ -4,7 +4,6 @@
 
 use std::{
     collections::BTreeMap,
-    fs::File,
     io::{self, Write},
     path::Path,
 };
@@ -12,6 +11,7 @@ use std::{
 use crate::{
     data::SyncInput,
     data::{CodegenKind, ImageSlice},
+    fs::File,
     lua_ast::{Expression, Statement, Table},
 };
 

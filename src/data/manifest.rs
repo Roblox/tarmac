@@ -1,13 +1,13 @@
 use std::{
     collections::BTreeMap,
-    fs, io,
+    io,
     path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
-use crate::{asset_name::AssetName, data::config::CodegenKind};
+use crate::{asset_name::AssetName, data::config::CodegenKind, fs};
 
 static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 

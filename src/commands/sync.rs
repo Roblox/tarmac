@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
-    env, fs,
+    env,
     path::{Path, PathBuf},
 };
 
@@ -15,6 +15,7 @@ use crate::{
     codegen::perform_codegen,
     data::{Config, ImageSlice, InputManifest, Manifest, SyncInput},
     dpi_scale::dpi_scale_for_path,
+    fs,
     image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::RobloxApiClient,

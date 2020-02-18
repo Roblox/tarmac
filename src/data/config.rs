@@ -1,12 +1,12 @@
 use std::{
-    fs, io,
+    io,
     path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
-use crate::glob::Glob;
+use crate::{fs, glob::Glob};
 
 static CONFIG_FILENAME: &str = "tarmac.toml";
 
