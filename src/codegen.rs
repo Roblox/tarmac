@@ -12,7 +12,7 @@ use std::{
 use crate::{
     data::SyncInput,
     data::{CodegenKind, ImageSlice},
-    lua_ast::{Block, Expression, Statement, Table},
+    lua_ast::{Expression, Statement, Table},
 };
 
 const CODEGEN_HEADER: &str =
@@ -100,9 +100,7 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
     }
 
     let root_item = build_item(&Item::Folder(indexed_items)).unwrap();
-    let ast = Block {
-        statements: vec![Statement::Return(root_item)],
-    };
+    let ast = Statement::Return(root_item);
 
     let mut file = File::create(output_path)?;
     writeln!(file, "{}", CODEGEN_HEADER)?;
@@ -140,15 +138,12 @@ fn codegen_individual(inputs: &[&SyncInput]) -> io::Result<()> {
             };
 
             if let Some(expression) = maybe_expression {
+                let ast = Statement::Return(expression);
+
                 let path = input.path.with_extension("lua");
+
                 let mut file = File::create(path)?;
-
                 writeln!(file, "{}", CODEGEN_HEADER)?;
-
-                let ast = Block {
-                    statements: vec![Statement::Return(expression)],
-                };
-
                 write!(file, "{}", ast)?;
             }
         }

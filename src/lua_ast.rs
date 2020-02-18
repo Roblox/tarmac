@@ -7,9 +7,15 @@
 
 use std::fmt::{self, Write};
 
+/// Trait that helps turn a type into an equivalent Lua snippet.
+///
+/// Designed to be similar to the `Display` trait from Rust's std.
 trait FmtLua {
     fn fmt_lua(&self, output: &mut LuaStream<'_>) -> fmt::Result;
 
+    /// Used to override how this type will appear when used as a table key.
+    /// Some types, like strings, can have a shorter representation as a table
+    /// key than the default, safe approach.
     fn fmt_table_key(&self, output: &mut LuaStream<'_>) -> fmt::Result {
         write!(output, "[")?;
         self.fmt_lua(output)?;
@@ -17,6 +23,9 @@ trait FmtLua {
     }
 }
 
+/// A small wrapper macro to implement Display using a type's FmtLua
+/// implementation. We can apply this to values that we want to stringify
+/// directly.
 macro_rules! proxy_display {
     ( $target: ty ) => {
         impl fmt::Display for $target {
@@ -60,9 +69,14 @@ impl FmtLua for Statement {
     }
 }
 
+proxy_display!(Statement);
+
 pub(crate) enum Expression {
     String(String),
     Table(Table),
+
+    /// Used as a catch-all for when this module doesn't define a primitive we
+    /// need for codegen.
     Raw(String),
 }
 
@@ -171,6 +185,10 @@ fn is_valid_ident(value: &str) -> bool {
     chars.all(|x| x.is_ascii_alphanumeric())
 }
 
+/// Wraps a `fmt::Write` with additional tracking to do pretty-printing of Lua.
+///
+/// Behaves similarly to `fmt::Formatter`. This trait's relationship to `LuaFmt`
+/// is very similar to `Formatter`'s relationship to `Display`.
 struct LuaStream<'a> {
     indent_level: usize,
     is_start_of_line: bool,
@@ -178,6 +196,11 @@ struct LuaStream<'a> {
 }
 
 impl fmt::Write for LuaStream<'_> {
+    /// Method to support the `write!` and `writeln!` macros. Instead of using a
+    /// trait directly, these macros just call `write_str` on their first
+    /// argument.
+    ///
+    /// This method is also available on `io::Write` and `fmt::Write`.
     fn write_str(&mut self, value: &str) -> fmt::Result {
         let mut is_first_line = true;
 
