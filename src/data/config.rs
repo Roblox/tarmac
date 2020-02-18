@@ -64,6 +64,7 @@ impl Config {
 
         let mut config: Self = toml::from_slice(&contents).context(Toml { path })?;
         config.file_path = path.to_owned();
+        config.make_paths_absolute();
 
         Ok(config)
     }
@@ -71,6 +72,21 @@ impl Config {
     /// The path that paths in this Config should be considered relative to.
     pub fn folder(&self) -> &Path {
         self.file_path.parent().unwrap()
+    }
+
+    /// Turn all relative paths referenced from this config into absolute paths.
+    fn make_paths_absolute(&mut self) {
+        let base = self.file_path.parent().unwrap();
+
+        for include in &mut self.includes {
+            make_absolute(&mut include.path, base);
+        }
+
+        for input in &mut self.inputs {
+            if let Some(codegen_path) = input.codegen_path.as_mut() {
+                make_absolute(codegen_path, base);
+            }
+        }
     }
 }
 
@@ -157,5 +173,13 @@ impl ConfigError {
             ConfigError::Io { source, .. } => source.kind() == io::ErrorKind::NotFound,
             _ => false,
         }
+    }
+}
+
+/// Utility to make a path absolute if it is not absolute already.
+fn make_absolute(path: &mut PathBuf, base: &Path) {
+    if path.is_relative() {
+        let new_path = base.join(&*path);
+        *path = new_path;
     }
 }
