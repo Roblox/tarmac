@@ -169,20 +169,28 @@ impl FmtLua for Table {
     }
 }
 
+fn is_valid_ident_char_start(value: char) -> bool {
+    value.is_ascii_alphabetic() || value == '_'
+}
+
+fn is_valid_ident_char(value: char) -> bool {
+    value.is_ascii_alphanumeric() || value == '_'
+}
+
 /// Tells whether the given string is a valid Lua identifier.
 fn is_valid_ident(value: &str) -> bool {
     let mut chars = value.chars();
 
     match chars.next() {
         Some(first) => {
-            if !first.is_alphabetic() {
+            if !is_valid_ident_char_start(first) {
                 return false;
             }
         }
         None => return false,
     }
 
-    chars.all(|x| x.is_ascii_alphanumeric())
+    chars.all(is_valid_ident_char)
 }
 
 /// Wraps a `fmt::Write` with additional tracking to do pretty-printing of Lua.
