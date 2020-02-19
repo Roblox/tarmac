@@ -1,6 +1,6 @@
 //! Defines how Tarmac generates Lua code for linking to assets.
 //!
-//! Tarmac uses structs with `Display` impls to build up templates.
+//! Tarmac uses a small Lua AST to build up generated code.
 
 use std::{
     collections::BTreeMap,
