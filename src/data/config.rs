@@ -86,6 +86,8 @@ impl Config {
             if let Some(codegen_path) = input.codegen_path.as_mut() {
                 make_absolute(codegen_path, base);
             }
+
+            make_absolute(&mut input.base_path, base);
         }
     }
 }
@@ -117,6 +119,9 @@ pub struct InputConfig {
     /// of inputs into a single file created at this path.
     #[serde(default)]
     pub codegen_path: Option<PathBuf>,
+
+    #[serde(default)]
+    pub base_path: PathBuf,
 
     /// Whether the assets affected by this config are allowed to be packed into
     /// spritesheets.

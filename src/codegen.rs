@@ -5,7 +5,7 @@
 use std::{
     collections::BTreeMap,
     io::{self, Write},
-    path::Path,
+    path::{self, Path},
 };
 
 use crate::{
@@ -35,14 +35,29 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
     let mut indexed_items: BTreeMap<&str, Item<'_>> = BTreeMap::new();
 
     for input in inputs {
-        let mut components = input.name.components().peekable();
+        let relative_path = input
+            .path
+            .strip_prefix(&input.config.base_path)
+            .expect("Input base path was not a base path for input");
+
+        let mut segments = Vec::new();
+        for component in relative_path.components() {
+            match component {
+                path::Component::Prefix(_)
+                | path::Component::RootDir
+                | path::Component::Normal(_) => segments.push(Path::new(component.as_os_str())),
+                path::Component::CurDir => {}
+                path::Component::ParentDir => assert!(segments.pop().is_some()),
+            }
+        }
+
         let mut current_dir = &mut indexed_items;
-
-        loop {
-            let name = components.next().unwrap();
-            let has_more_components = components.peek().is_some();
-
-            if has_more_components {
+        for (i, segment) in segments.iter().enumerate() {
+            if i == segments.len() - 1 {
+                let name = segment.file_stem().unwrap().to_str().unwrap();
+                current_dir.insert(name, Item::Input(input));
+            } else {
+                let name = segment.to_str().unwrap();
                 let next_entry = current_dir
                     .entry(name)
                     .or_insert_with(|| Item::Folder(BTreeMap::new()));
@@ -55,9 +70,6 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
                         panic!("Malformed input tree");
                     }
                 }
-            } else {
-                current_dir.insert(name, Item::Input(input));
-                break;
             }
         }
     }
