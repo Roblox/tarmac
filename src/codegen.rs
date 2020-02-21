@@ -26,20 +26,31 @@ pub fn perform_codegen(output_path: Option<&Path>, inputs: &[&SyncInput]) -> io:
     }
 }
 
+/// Perform codegen for a group of inputs who have `codegen_path` defined.
+///
+/// We'll build up a Lua file containing nested tables that match the structure
+/// of the input's path with its base path stripped away.
 fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> {
+    /// Represents the tree of inputs as we're discovering them.
     enum Item<'a> {
         Folder(BTreeMap<&'a str, Item<'a>>),
         Input(&'a SyncInput),
     }
 
-    let mut indexed_items: BTreeMap<&str, Item<'_>> = BTreeMap::new();
+    let mut root_folder: BTreeMap<&str, Item<'_>> = BTreeMap::new();
 
+    // First, collect all of the inputs and group them together into a tree
+    // according to their relative paths.
     for input in inputs {
+        // If we can't construct a relative path, there isn't a sensible name
+        // that we can use to refer to this input.
         let relative_path = input
             .path
             .strip_prefix(&input.config.base_path)
             .expect("Input base path was not a base path for input");
 
+        // Collapse `..` path segments so that we can map this path onto our
+        // tree of inputs.
         let mut segments = Vec::new();
         for component in relative_path.components() {
             match component {
@@ -51,9 +62,15 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
             }
         }
 
-        let mut current_dir = &mut indexed_items;
+        // Navigate down the tree, creating any folder entries that don't exist
+        // yet.
+        //
+        // This is basically an in-memory `mkdir -p` followed by `touch`.
+        let mut current_dir = &mut root_folder;
         for (i, segment) in segments.iter().enumerate() {
             if i == segments.len() - 1 {
+                // We assume that the last segment of a path must be a file.
+
                 let name = segment.file_stem().unwrap().to_str().unwrap();
                 current_dir.insert(name, Item::Input(input));
             } else {
@@ -67,7 +84,12 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
                         current_dir = next_dir;
                     }
                     Item::Input(_) => {
-                        panic!("Malformed input tree");
+                        log::error!(
+                            "A path tried to traverse through a folder as if it were a file: {}",
+                            input.path.display()
+                        );
+                        log::error!("The path segment '{}' is a file because of previous inputs, not a file.", name);
+                        break;
                     }
                 }
             }
@@ -111,7 +133,7 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
         }
     }
 
-    let root_item = build_item(&Item::Folder(indexed_items)).unwrap();
+    let root_item = build_item(&Item::Folder(root_folder)).unwrap();
     let ast = Statement::Return(root_item);
 
     let mut file = File::create(output_path)?;
@@ -121,6 +143,8 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
     Ok(())
 }
 
+/// Perform codegen for a group of inputs that don't have `codegen_path`
+/// defined, and so generate individual files.
 fn codegen_individual(inputs: &[&SyncInput]) -> io::Result<()> {
     for input in inputs {
         if let Some(codegen) = input.config.codegen {
