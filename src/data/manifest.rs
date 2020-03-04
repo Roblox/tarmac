@@ -1,13 +1,13 @@
 use std::{
     collections::BTreeMap,
-    fs, io,
+    io,
     path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
-use crate::{asset_name::AssetName, data::config::CodegenKind};
+use crate::{asset_name::AssetName, data::config::CodegenKind, fs};
 
 static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 
@@ -62,7 +62,7 @@ pub struct InputManifest {
 
     /// The kind of Lua code that was generated during the last sync for this
     /// input.
-    pub codegen: CodegenKind,
+    pub codegen: Option<CodegenKind>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

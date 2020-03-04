@@ -1,12 +1,12 @@
 use std::{
-    fs, io,
+    io,
     path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
-use crate::glob::Glob;
+use crate::{fs, glob::Glob};
 
 static CONFIG_FILENAME: &str = "tarmac.toml";
 
@@ -64,6 +64,7 @@ impl Config {
 
         let mut config: Self = toml::from_slice(&contents).context(Toml { path })?;
         config.file_path = path.to_owned();
+        config.make_paths_absolute();
 
         Ok(config)
     }
@@ -71,6 +72,23 @@ impl Config {
     /// The path that paths in this Config should be considered relative to.
     pub fn folder(&self) -> &Path {
         self.file_path.parent().unwrap()
+    }
+
+    /// Turn all relative paths referenced from this config into absolute paths.
+    fn make_paths_absolute(&mut self) {
+        let base = self.file_path.parent().unwrap();
+
+        for include in &mut self.includes {
+            make_absolute(&mut include.path, base);
+        }
+
+        for input in &mut self.inputs {
+            if let Some(codegen_path) = input.codegen_path.as_mut() {
+                make_absolute(codegen_path, base);
+            }
+
+            make_absolute(&mut input.base_path, base);
+        }
     }
 }
 
@@ -94,11 +112,16 @@ pub struct InputConfig {
 
     /// What kind of extra links Tarmac should generate when these assets are
     /// consumed in a project.
-    ///
-    /// These links can be used by code located near the affected assets to
-    /// import them dynamically as if they were normal Lua modules.
     #[serde(default)]
-    pub codegen: CodegenKind,
+    pub codegen: Option<CodegenKind>,
+
+    /// If specified, batches together all of the generated code for this group
+    /// of inputs into a single file created at this path.
+    #[serde(default)]
+    pub codegen_path: Option<PathBuf>,
+
+    #[serde(default)]
+    pub base_path: PathBuf,
 
     /// Whether the assets affected by this config are allowed to be packed into
     /// spritesheets.
@@ -114,12 +137,6 @@ pub struct InputConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CodegenKind {
-    /// Emit no Lua files linking images to their assets.
-    ///
-    /// This option is useful if another tool is handling the asset mapping, or
-    /// assets don't need to be accessed programmatically.
-    None,
-
     /// Emit Lua files that return asset URLs as a string.
     ///
     /// This option is useful for images that will never be packed into a
@@ -136,12 +153,6 @@ pub enum CodegenKind {
     /// * `ImageRectOffset` (Vector2)
     /// * `ImageRectSize` (Vector2)
     UrlAndSlice,
-}
-
-impl Default for CodegenKind {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 #[derive(Debug, Snafu)]
@@ -167,5 +178,13 @@ impl ConfigError {
             ConfigError::Io { source, .. } => source.kind() == io::ErrorKind::NotFound,
             _ => false,
         }
+    }
+}
+
+/// Utility to make a path absolute if it is not absolute already.
+fn make_absolute(path: &mut PathBuf, base: &Path) {
+    if path.is_relative() {
+        let new_path = base.join(&*path);
+        *path = new_path;
     }
 }

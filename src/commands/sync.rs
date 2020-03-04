@@ -1,8 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     env,
-    fs::{self, File},
-    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -14,9 +12,10 @@ use crate::{
     alpha_bleed::alpha_bleed,
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
-    codegen::{AssetUrlTemplate, UrlAndSliceTemplate},
-    data::{CodegenKind, Config, ImageSlice, InputConfig, InputManifest, Manifest},
+    codegen::perform_codegen,
+    data::{Config, ImageSlice, InputManifest, Manifest, SyncInput},
     dpi_scale::dpi_scale_for_path,
+    fs,
     image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::RobloxApiClient,
@@ -48,18 +47,18 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
     match options.target {
         SyncTarget::Roblox => {
             let api_client = api_client.as_mut().ok_or(Error::NoAuth)?;
-            let mut strategy = RobloxSyncBackend::new(api_client);
+            let mut backend = RobloxSyncBackend::new(api_client);
 
-            session.sync(&mut strategy)?;
+            session.sync_with_backend(&mut backend)?;
         }
         SyncTarget::ContentFolder => {
-            let mut strategy = ContentSyncBackend {};
+            let mut backend = ContentSyncBackend {};
 
-            session.sync(&mut strategy)?;
+            session.sync_with_backend(&mut backend)?;
         }
         SyncTarget::Debug => {
-            let mut strategy = DebugSyncBackend::new();
-            session.sync(&mut strategy)?;
+            let mut backend = DebugSyncBackend::new();
+            session.sync_with_backend(&mut backend)?;
         }
     }
 
@@ -86,31 +85,6 @@ struct SyncSession {
 
     /// All of the inputs discovered so far in the current sync.
     inputs: BTreeMap<AssetName, SyncInput>,
-}
-
-#[derive(Debug)]
-struct SyncInput {
-    /// The path on disk to the file containing this input.
-    path: PathBuf,
-
-    /// The configuration that applied to this input when it was discovered.
-    config: InputConfig,
-
-    contents: Vec<u8>,
-    hash: String,
-
-    /// The asset ID of this input the last time it was uploaded.
-    id: Option<u64>,
-
-    /// If the asset is an image that was packed into a spritesheet, contains
-    /// the portion of the uploaded image that contains this input.
-    slice: Option<ImageSlice>,
-}
-
-impl SyncInput {
-    pub fn is_unchanged_since_last_sync(&self, old_manifest: &InputManifest) -> bool {
-        self.hash == old_manifest.hash && self.config.packable == old_manifest.packable
-    }
 }
 
 /// Contains information to help Tarmac batch process different kinds of assets.
@@ -264,8 +238,9 @@ impl SyncSession {
                     let hash = generate_asset_hash(&contents);
 
                     let already_found = inputs.insert(
-                        name,
+                        name.clone(),
                         SyncInput {
+                            name,
                             path,
                             config: input_config.clone(),
                             contents,
@@ -287,7 +262,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync<S: SyncBackend>(&mut self, backend: &mut S) -> Result<(), Error> {
+    fn sync_with_backend<S: SyncBackend>(&mut self, backend: &mut S) -> Result<(), Error> {
         let mut compatible_input_groups = BTreeMap::new();
 
         for (input_name, input) in &self.inputs {
@@ -459,7 +434,7 @@ impl SyncSession {
 
     fn sync_unpackable_image<S: SyncBackend>(
         &mut self,
-        strategy: &mut S,
+        backend: &mut S,
         input_name: &AssetName,
     ) -> Result<(), Error> {
         let input = self.inputs.get_mut(input_name).unwrap();
@@ -480,7 +455,7 @@ impl SyncSession {
 
                 log::trace!("Contents changed...");
 
-                strategy.upload(upload_data)?.id
+                backend.upload(upload_data)?.id
             } else if let Some(prev_id) = input_manifest.id {
                 // The file's contents are the same as the previous sync and
                 // this image has been uploaded previously.
@@ -494,7 +469,7 @@ impl SyncSession {
 
                     log::trace!("Config changed...");
 
-                    strategy.upload(upload_data)?.id
+                    backend.upload(upload_data)?.id
                 } else {
                     // Nothing has changed, we're good to go!
 
@@ -508,14 +483,14 @@ impl SyncSession {
 
                 log::trace!("Image has never been uploaded...");
 
-                strategy.upload(upload_data)?.id
+                backend.upload(upload_data)?.id
             }
         } else {
             // This input was added since the last sync, if there was one.
 
             log::trace!("Image was added since last sync...");
 
-            strategy.upload(upload_data)?.id
+            backend.upload(upload_data)?.id
         };
 
         input.id = Some(id);
@@ -555,47 +530,35 @@ impl SyncSession {
     fn codegen(&self) -> Result<(), Error> {
         log::trace!("Starting codegen");
 
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        struct CodegenCompatibility<'a> {
+            output_path: Option<&'a Path>,
+        }
+
+        let mut compatible_codegen_groups = HashMap::new();
+
         for (input_name, input) in &self.inputs {
-            log::trace!(
-                "Using codegen '{:?}' for {}",
-                input.config.codegen,
-                input_name
-            );
+            let output_path = input
+                .config
+                .codegen_path
+                .as_ref()
+                .map(|path| path.as_path());
 
-            match input.config.codegen {
-                CodegenKind::None => {}
+            let compat = CodegenCompatibility { output_path };
 
-                CodegenKind::AssetUrl => {
-                    if let Some(id) = input.id {
-                        let template = AssetUrlTemplate { id };
+            let group = compatible_codegen_groups
+                .entry(compat)
+                .or_insert_with(Vec::new);
+            group.push(input_name.clone());
+        }
 
-                        let path = &input.path.with_extension("lua");
-                        let mut file = File::create(path).context(error::Io { path })?;
-                        write!(&mut file, "{}", template).context(error::Io { path })?;
+        for (compat, names) in compatible_codegen_groups {
+            let inputs: Vec<_> = names.iter().map(|name| &self.inputs[name]).collect();
+            let output_path = compat.output_path;
 
-                        log::trace!("Generated code at {}", path.display());
-                    } else {
-                        log::trace!("Skipping codegen because this input was not uploaded.");
-                    }
-                }
-
-                CodegenKind::UrlAndSlice => {
-                    if let Some(id) = input.id {
-                        let template = UrlAndSliceTemplate {
-                            id,
-                            slice: input.slice,
-                        };
-
-                        let path = &input.path.with_extension("lua");
-                        let mut file = File::create(path).context(error::Io { path })?;
-                        write!(&mut file, "{}", template).context(error::Io { path })?;
-
-                        log::trace!("Generated code at {}", path.display());
-                    } else {
-                        log::trace!("Skipping codegen because this input was not uploaded.");
-                    }
-                }
-            }
+            perform_codegen(output_path, &inputs).context(error::Io {
+                path: PathBuf::new(),
+            })?;
         }
 
         Ok(())

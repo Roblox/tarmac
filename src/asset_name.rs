@@ -40,6 +40,11 @@ impl AssetName {
     pub fn spritesheet() -> Self {
         AssetName("spritesheet.png".into())
     }
+
+    #[cfg(test)]
+    pub(crate) fn new<S: AsRef<str>>(inner: S) -> Self {
+        Self(inner.as_ref().into())
+    }
 }
 
 impl AsRef<str> for AssetName {

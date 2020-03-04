@@ -1,9 +1,10 @@
-use std::{borrow::Cow, fs, io, path::Path};
+use std::{borrow::Cow, io, path::Path};
 
 use snafu::Snafu;
 
 use crate::{
     asset_name::AssetName,
+    fs,
     roblox_web_api::{ImageUploadData, RobloxApiClient},
 };
 
