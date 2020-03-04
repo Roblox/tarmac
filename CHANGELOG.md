@@ -1,6 +1,8 @@
 # Tarmac Changelog
 
 ## Unreleased Changes
+
+## 0.4.0 (2020-03-04)
 * Tarmac now "alpha-bleeds" packed image spritesheets to prevent artifacts from appearing when resized in Roblox.
 * Reworked Tarmac's codegen strategy. ([#22](https://github.com/rojo-rbx/tarmac/pull/22)
 	* Inputs can now specify `codegen-path` and `base-path` to group together modules.
