@@ -54,13 +54,11 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
     }
 }
 
-pub struct ContentSyncBackend {
-    // TODO: Studio install information
-}
+pub struct NoneSyncBackend;
 
-impl SyncBackend for ContentSyncBackend {
+impl SyncBackend for NoneSyncBackend {
     fn upload(&mut self, _data: UploadInfo) -> Result<UploadResponse, Error> {
-        unimplemented!("content folder uploading");
+        Err(Error::NoneBackend)
     }
 }
 
@@ -98,9 +96,16 @@ impl SyncBackend for DebugSyncBackend {
 
 #[derive(Debug, Snafu)]
 pub enum Error {
-    Io { source: io::Error },
+    Io {
+        source: io::Error,
+    },
 
-    Http { source: reqwest::Error },
+    Http {
+        source: reqwest::Error,
+    },
+
+    #[snafu(display("Cannot upload assets with the 'none' target."))]
+    NoneBackend,
 }
 
 impl From<io::Error> for Error {

@@ -20,7 +20,7 @@ use crate::{
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::RobloxApiClient,
     sync_backend::{
-        ContentSyncBackend, DebugSyncBackend, Error as SyncBackendError, RobloxSyncBackend,
+        DebugSyncBackend, Error as SyncBackendError, NoneSyncBackend, RobloxSyncBackend,
         SyncBackend, UploadInfo,
     },
 };
@@ -51,8 +51,8 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
 
             session.sync_with_backend(&mut backend)?;
         }
-        SyncTarget::ContentFolder => {
-            let mut backend = ContentSyncBackend {};
+        SyncTarget::None => {
+            let mut backend = NoneSyncBackend;
 
             session.sync_with_backend(&mut backend)?;
         }

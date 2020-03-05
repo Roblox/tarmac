@@ -71,7 +71,7 @@ pub struct SyncOptions {
 #[derive(Debug, Clone, Copy)]
 pub enum SyncTarget {
     Roblox,
-    ContentFolder,
+    None,
     Debug,
 }
 
@@ -81,11 +81,11 @@ impl FromStr for SyncTarget {
     fn from_str(value: &str) -> Result<SyncTarget, Self::Err> {
         match value {
             "roblox" => Ok(SyncTarget::Roblox),
-            "content-folder" => Ok(SyncTarget::ContentFolder),
+            "none" => Ok(SyncTarget::None),
             "debug" => Ok(SyncTarget::Debug),
 
             _ => Err(String::from(
-                "Invalid sync target. Valid options are roblox, content-folder, and debug.",
+                "Invalid sync target. Valid options are roblox, none, and debug.",
             )),
         }
     }

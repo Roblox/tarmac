@@ -1,6 +1,8 @@
 # Tarmac Changelog
 
 ## Unreleased Changes
+* Removed (unimplemented) `content-folder` target and added `none` target.
+	* This target always fails to upload, and is useful to verify that all assets have been uploaded as part of a CI job.
 
 ## 0.4.0 (2020-03-04)
 * Tarmac now "alpha-bleeds" packed image spritesheets to prevent artifacts from appearing when resized in Roblox.
