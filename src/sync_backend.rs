@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::{
     asset_name::AssetName,
-    roblox_web_api::{ImageUploadData, RobloxApiClient},
+    roblox_web_api::{ImageUploadData, RobloxApiClient, RobloxApiError},
 };
 
 pub trait SyncBackend {
@@ -106,8 +106,8 @@ pub enum Error {
     },
 
     #[error(transparent)]
-    Http {
+    RobloxError {
         #[from]
-        source: reqwest::Error,
+        source: RobloxApiError,
     },
 }

@@ -1,12 +1,11 @@
-use std::{borrow::Cow, fmt, path::Path};
+use std::{borrow::Cow, fmt};
 
-use fs_err as fs;
 use reqwest::{
     header::{HeaderValue, COOKIE},
-    multipart::{Form, Part},
     Client, Request, Response, StatusCode,
 };
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct ImageUploadData<'a> {
@@ -31,7 +30,7 @@ pub struct RobloxApiClient {
 
 impl fmt::Debug for RobloxApiClient {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "<RobloxApiClient>")
+        write!(formatter, "RobloxApiClient>")
     }
 }
 
@@ -44,40 +43,35 @@ impl RobloxApiClient {
         }
     }
 
-    pub fn upload_image(&mut self, data: ImageUploadData) -> reqwest::Result<UploadResponse> {
+    pub fn upload_image(
+        &mut self,
+        data: ImageUploadData,
+    ) -> Result<UploadResponse, RobloxApiError> {
         let url = "https://data.roblox.com/data/upload/json?assetTypeId=13";
 
         let mut response = self.execute_with_csrf_retry(|client| {
-            client
+            Ok(client
                 .post(url)
                 .query(&[("name", data.name), ("description", data.description)])
                 .body(data.image_data.clone().into_owned())
-                .build()
+                .build()?)
         })?;
 
+        let body = response.text().unwrap();
+
         if response.status().is_success() {
-            let body: UploadResponse = match response.json() {
-                Ok(body) => body,
-                Err(err) => {
-                    panic!("Got malformed API response: {}", err);
-                }
-            };
-
-            Ok(body)
+            Ok(serde_json::from_str(&body)?)
         } else {
-            let body = response.text().unwrap();
-
-            log::error!("response: {:?}", response);
-            log::error!("status: {:?}", response.status());
-            log::error!("body: {}", body);
-
-            unimplemented!("Handle bad responses");
+            Err(RobloxApiError::ResponseError {
+                status: response.status(),
+                body,
+            })
         }
     }
 
-    fn execute_with_csrf_retry<F>(&mut self, make_request: F) -> reqwest::Result<Response>
+    fn execute_with_csrf_retry<F>(&mut self, make_request: F) -> Result<Response, RobloxApiError>
     where
-        F: Fn(&Client) -> reqwest::Result<Request>,
+        F: Fn(&Client) -> Result<Request, RobloxApiError>,
     {
         let mut request = make_request(&self.client)?;
         self.attach_headers(&mut request);
@@ -94,7 +88,7 @@ impl RobloxApiClient {
                     let mut new_request = make_request(&self.client)?;
                     self.attach_headers(&mut new_request);
 
-                    self.client.execute(new_request)
+                    Ok(self.client.execute(new_request)?)
                 } else {
                     Ok(response)
                 }
@@ -115,44 +109,22 @@ impl RobloxApiClient {
             request.headers_mut().insert("X-CSRF-Token", csrf.clone());
         }
     }
+}
 
-    /// I think this method is supposed to work, but currently does not upload
-    /// assets of type Image correctly.
-    // TODO: Switch to using this endpoint instead if it can work for us.
-    #[allow(dead_code)]
-    fn upload_image_publish_api(&mut self, path: &Path) {
-        let url = "https://publish.roblox.com/v1/assets/upload";
+#[derive(Debug, Error)]
+pub enum RobloxApiError {
+    #[error("Roblox API HTTP error")]
+    Http {
+        #[from]
+        source: reqwest::Error,
+    },
 
-        let mut response = self
-            .execute_with_csrf_retry(|client| {
-                let config = Part::text(
-                    r#"
-                {
-                  "apple": {
-                    "description": "I tried.",
-                    "name": "Apple",
-                    "type": "Image"
-                  }
-                }"#,
-                )
-                .file_name("config.json")
-                .mime_str("application/json")?;
+    #[error("Roblox API returned success, but had malformed JSON response")]
+    BadResponseJson {
+        #[from]
+        source: serde_json::Error,
+    },
 
-                let buffer = fs::read(path).expect("Couldn't read file");
-                let apple = Part::bytes(buffer)
-                    .file_name("apple.png")
-                    .mime_str("image/png")?;
-
-                let form = Form::new().part("config", config).part("apple", apple);
-
-                client.post(url).multipart(form).build()
-            })
-            .unwrap();
-
-        let body = response.text().unwrap();
-
-        println!("response: {:?}", response);
-        println!("status: {:?}", response.status());
-        println!("body: {}", body);
-    }
+    #[error("Roblox API returned HTTP {status} with body: {body}")]
+    ResponseError { status: StatusCode, body: String },
 }
