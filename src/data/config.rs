@@ -3,10 +3,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use fs_err as fs;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{fs, glob::Glob};
+use crate::glob::Glob;
 
 static CONFIG_FILENAME: &str = "tarmac.toml";
 

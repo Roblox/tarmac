@@ -1,13 +1,12 @@
 use std::{borrow::Cow, fmt, path::Path};
 
+use fs_err as fs;
 use reqwest::{
     header::{HeaderValue, COOKIE},
     multipart::{Form, Part},
     Client, Request, Response, StatusCode,
 };
 use serde::{Deserialize, Serialize};
-
-use crate::fs;
 
 #[derive(Debug, Clone)]
 pub struct ImageUploadData<'a> {

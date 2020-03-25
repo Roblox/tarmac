@@ -1,10 +1,10 @@
 use std::{borrow::Cow, io, path::Path};
 
+use fs_err as fs;
 use thiserror::Error;
 
 use crate::{
     asset_name::AssetName,
-    fs,
     roblox_web_api::{ImageUploadData, RobloxApiClient},
 };
 

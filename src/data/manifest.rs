@@ -4,10 +4,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use fs_err as fs;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{asset_name::AssetName, data::config::CodegenKind, fs};
+use crate::{asset_name::AssetName, data::config::CodegenKind};
 
 static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 

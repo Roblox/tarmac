@@ -1,8 +1,9 @@
 use std::borrow::Cow;
 
+use fs_err as fs;
+
 use crate::{
     auth_cookie::get_auth_cookie,
-    fs,
     options::{GlobalOptions, UploadImageOptions},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
 };

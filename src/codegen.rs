@@ -8,10 +8,11 @@ use std::{
     path::{self, Path},
 };
 
+use fs_err::File;
+
 use crate::{
     data::SyncInput,
     data::{CodegenKind, ImageSlice},
-    fs::File,
     lua_ast::{Expression, Statement, Table},
 };
 

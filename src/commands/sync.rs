@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use fs_err as fs;
 use packos::{InputItem, SimplePacker};
 use thiserror::Error;
 use walkdir::WalkDir;
@@ -15,7 +16,6 @@ use crate::{
     codegen::perform_codegen,
     data::{Config, ConfigError, ImageSlice, InputManifest, Manifest, ManifestError, SyncInput},
     dpi_scale::dpi_scale_for_path,
-    fs,
     image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::RobloxApiClient,
