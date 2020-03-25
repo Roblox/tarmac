@@ -5,7 +5,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use snafu::{ResultExt, Snafu};
+use thiserror::Error;
 
 use crate::{asset_name::AssetName, data::config::CodegenKind, fs};
 
@@ -23,8 +23,12 @@ impl Manifest {
         let folder_path = folder_path.as_ref();
         let file_path = &folder_path.join(MANIFEST_FILENAME);
 
-        let contents = fs::read(file_path).context(Io { file_path })?;
-        let config = toml::from_slice(&contents).context(DeserializeToml { file_path })?;
+        let contents = fs::read(file_path)?;
+        let config =
+            toml::from_slice(&contents).map_err(|source| ManifestError::DeserializeToml {
+                source,
+                file_path: file_path.to_owned(),
+            })?;
 
         Ok(config)
     }
@@ -33,8 +37,8 @@ impl Manifest {
         let folder_path = folder_path.as_ref();
         let file_path = &folder_path.join(MANIFEST_FILENAME);
 
-        let serialized = toml::to_vec(self).context(SerializeToml)?;
-        fs::write(file_path, serialized).context(Io { file_path })?;
+        let serialized = toml::to_vec(self)?;
+        fs::write(file_path, serialized)?;
 
         log::trace!("Saved manifest to {}", file_path.display());
 
@@ -94,19 +98,23 @@ impl ImageSlice {
     }
 }
 
-#[derive(Debug, Snafu)]
+#[derive(Debug, Error)]
 pub enum ManifestError {
+    #[error("Error deserializing TOML from path {}", .file_path.display())]
     DeserializeToml {
         file_path: PathBuf,
         source: toml::de::Error,
     },
 
+    #[error(transparent)]
     SerializeToml {
+        #[from]
         source: toml::ser::Error,
     },
 
+    #[error(transparent)]
     Io {
-        file_path: PathBuf,
+        #[from]
         source: io::Error,
     },
 }
@@ -114,7 +122,7 @@ pub enum ManifestError {
 impl ManifestError {
     pub fn is_not_found(&self) -> bool {
         match self {
-            ManifestError::Io { source, .. } => source.kind() == io::ErrorKind::NotFound,
+            ManifestError::Io { source } => source.kind() == io::ErrorKind::NotFound,
             _ => false,
         }
     }

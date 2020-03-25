@@ -4,7 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use snafu::{ResultExt, Snafu};
+use thiserror::Error;
 
 use crate::{fs, glob::Glob};
 
@@ -42,7 +42,7 @@ pub struct Config {
 impl Config {
     pub fn read_from_folder_or_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
         let path = path.as_ref();
-        let meta = fs::metadata(path).context(Io { path })?;
+        let meta = fs::metadata(path)?;
 
         if meta.is_file() {
             Self::read_from_file(path)
@@ -60,9 +60,12 @@ impl Config {
 
     pub fn read_from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
         let path = path.as_ref();
-        let contents = fs::read(path).context(Io { path })?;
+        let contents = fs::read(path)?;
 
-        let mut config: Self = toml::from_slice(&contents).context(Toml { path })?;
+        let mut config: Self = toml::from_slice(&contents).map_err(|source| ConfigError::Toml {
+            source,
+            path: path.to_owned(),
+        })?;
         config.file_path = path.to_owned();
         config.make_paths_absolute();
 
@@ -155,16 +158,19 @@ pub enum CodegenKind {
     UrlAndSlice,
 }
 
-#[derive(Debug, Snafu)]
+#[derive(Debug, Error)]
 pub enum ConfigError {
-    #[snafu(display("{} in {}", source, path.display()))]
+    #[error("Error deserializing TOML from path {}", .path.display())]
     Toml {
         path: PathBuf,
         source: toml::de::Error,
     },
 
-    #[snafu(display("{} in {}", source, path.display()))]
-    Io { path: PathBuf, source: io::Error },
+    #[error(transparent)]
+    Io {
+        #[from]
+        source: io::Error,
+    },
 }
 
 impl ConfigError {
@@ -175,7 +181,7 @@ impl ConfigError {
     /// order to avoid needing to check if a file with the right name exists.
     pub fn is_not_found(&self) -> bool {
         match self {
-            ConfigError::Io { source, .. } => source.kind() == io::ErrorKind::NotFound,
+            ConfigError::Io { source } => source.kind() == io::ErrorKind::NotFound,
             _ => false,
         }
     }

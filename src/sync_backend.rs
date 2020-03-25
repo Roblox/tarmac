@@ -1,6 +1,6 @@
 use std::{borrow::Cow, io, path::Path};
 
-use snafu::Snafu;
+use thiserror::Error;
 
 use crate::{
     asset_name::AssetName,
@@ -94,28 +94,20 @@ impl SyncBackend for DebugSyncBackend {
     }
 }
 
-#[derive(Debug, Snafu)]
+#[derive(Debug, Error)]
 pub enum Error {
+    #[error("Cannot upload assets with the 'none' target.")]
+    NoneBackend,
+
+    #[error(transparent)]
     Io {
+        #[from]
         source: io::Error,
     },
 
+    #[error(transparent)]
     Http {
+        #[from]
         source: reqwest::Error,
     },
-
-    #[snafu(display("Cannot upload assets with the 'none' target."))]
-    NoneBackend,
-}
-
-impl From<io::Error> for Error {
-    fn from(source: io::Error) -> Self {
-        Self::Io { source }
-    }
-}
-
-impl From<reqwest::Error> for Error {
-    fn from(source: reqwest::Error) -> Self {
-        Self::Http { source }
-    }
 }

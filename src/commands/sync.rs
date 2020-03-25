@@ -1,11 +1,11 @@
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
-    env,
+    env, io,
     path::{Path, PathBuf},
 };
 
 use packos::{InputItem, SimplePacker};
-use snafu::ResultExt;
+use thiserror::Error;
 use walkdir::WalkDir;
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     asset_name::AssetName,
     auth_cookie::get_auth_cookie,
     codegen::perform_codegen,
-    data::{Config, ImageSlice, InputManifest, Manifest, SyncInput},
+    data::{Config, ConfigError, ImageSlice, InputManifest, Manifest, ManifestError, SyncInput},
     dpi_scale::dpi_scale_for_path,
     fs,
     image::Image,
@@ -25,13 +25,10 @@ use crate::{
     },
 };
 
-use self::error::Error;
-pub use self::error::Error as SyncError;
-
 pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
     let fuzzy_config_path = match options.config_path {
         Some(v) => v,
-        None => env::current_dir().context(error::CurrentDir)?,
+        None => env::current_dir()?,
     };
 
     let mut api_client = global
@@ -103,15 +100,14 @@ impl SyncSession {
     fn new(fuzzy_config_path: &Path) -> Result<Self, Error> {
         log::trace!("Starting new sync session");
 
-        let root_config =
-            Config::read_from_folder_or_file(&fuzzy_config_path).context(error::Config)?;
+        let root_config = Config::read_from_folder_or_file(&fuzzy_config_path)?;
 
         log::trace!("Starting from config \"{}\"", root_config.name);
 
         let original_manifest = match Manifest::read_from_folder(root_config.folder()) {
             Ok(manifest) => manifest,
             Err(err) if err.is_not_found() => Manifest::default(),
-            other => other.context(error::Manifest)?,
+            other => other?,
         };
 
         Ok(Self {
@@ -141,14 +137,13 @@ impl SyncSession {
         );
 
         while let Some(search_path) = to_search.pop_front() {
-            let search_meta =
-                fs::metadata(&search_path).context(error::Io { path: &search_path })?;
+            let search_meta = fs::metadata(&search_path)?;
 
             if search_meta.is_file() {
                 // This is a file that's explicitly named by a config. We'll
                 // check that it's a Tarmac config and include it.
 
-                let config = Config::read_from_file(&search_path).context(error::Config)?;
+                let config = Config::read_from_file(&search_path)?;
 
                 // Include any configs that this config references.
                 to_search.extend(config.includes.iter().map(|include| include.path.clone()));
@@ -173,18 +168,16 @@ impl SyncSession {
                         // We didn't find a config, keep searching down this
                         // branch of the filesystem.
 
-                        let children =
-                            fs::read_dir(&search_path).context(error::Io { path: &search_path })?;
+                        let children = fs::read_dir(&search_path)?;
 
                         for entry in children {
-                            let entry = entry.context(error::Io { path: &search_path })?;
+                            let entry = entry?;
                             let entry_path = entry.path();
 
                             // DirEntry has a metadata method, but in the case
                             // of symlinks, it returns metadata about the
                             // symlink and not the file or folder.
-                            let entry_meta = fs::metadata(&entry_path)
-                                .context(error::Io { path: &entry_path })?;
+                            let entry_meta = fs::metadata(&entry_path)?;
 
                             if entry_meta.is_dir() {
                                 to_search.push_back(entry_path);
@@ -192,8 +185,8 @@ impl SyncSession {
                         }
                     }
 
-                    err @ Err(_) => {
-                        err.context(error::Config)?;
+                    Err(err) => {
+                        return Err(err.into());
                     }
                 }
             }
@@ -234,7 +227,7 @@ impl SyncSession {
                     let name = AssetName::from_paths(config_path, &path);
                     log::trace!("Found input {}", name);
 
-                    let contents = fs::read(&path).context(error::Io { path: &path })?;
+                    let contents = fs::read(&path)?;
                     let hash = generate_asset_hash(&contents);
 
                     let already_found = inputs.insert(
@@ -369,7 +362,7 @@ impl SyncSession {
 
         for name in group {
             let input = &self.inputs[&name];
-            let image = Image::decode_png(input.contents.as_slice()).context(error::PngDecode)?;
+            let image = Image::decode_png(input.contents.as_slice())?;
 
             let input = InputItem::new(image.size());
 
@@ -520,9 +513,7 @@ impl SyncSession {
             })
             .collect();
 
-        manifest
-            .write_to_folder(self.root_config().folder())
-            .context(error::Manifest)?;
+        manifest.write_to_folder(self.root_config().folder())?;
 
         Ok(())
     }
@@ -556,9 +547,7 @@ impl SyncSession {
             let inputs: Vec<_> = names.iter().map(|name| &self.inputs[name]).collect();
             let output_path = compat.output_path;
 
-            perform_codegen(output_path, &inputs).context(error::Io {
-                path: PathBuf::new(),
-            })?;
+            perform_codegen(output_path, &inputs)?;
         }
 
         Ok(())
@@ -578,88 +567,55 @@ fn generate_asset_hash(content: &[u8]) -> String {
     format!("{}", blake3::hash(content).to_hex())
 }
 
-mod error {
-    use super::*;
+pub use Error as SyncError;
 
-    use crate::data::{ConfigError, ManifestError};
-    use snafu::Snafu;
-    use std::{io, path::PathBuf};
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Path {} was described by more than one glob", .path.display())]
+    OverlappingGlobs { path: PathBuf },
 
-    #[derive(Debug, Snafu)]
-    #[snafu(visibility = "pub(super)")]
-    pub enum Error {
-        #[snafu(display("{}", source))]
-        Config {
-            source: ConfigError,
-        },
+    #[error("'tarmac sync' requires an authentication cookie")]
+    NoAuth,
 
-        #[snafu(display("{}", source))]
-        Backend {
-            source: SyncBackendError,
-        },
+    #[error(transparent)]
+    WalkDir {
+        #[from]
+        source: walkdir::Error,
+    },
 
-        #[snafu(display("{}", source))]
-        Manifest {
-            source: ManifestError,
-        },
+    #[error(transparent)]
+    Config {
+        #[from]
+        source: ConfigError,
+    },
 
-        Io {
-            path: PathBuf,
-            source: io::Error,
-        },
+    #[error(transparent)]
+    Backend {
+        #[from]
+        source: SyncBackendError,
+    },
 
-        #[snafu(display("couldn't get the current directory of the process"))]
-        CurrentDir {
-            source: io::Error,
-        },
+    #[error(transparent)]
+    Manifest {
+        #[from]
+        source: ManifestError,
+    },
 
-        #[snafu(display("'tarmac sync' requires an authentication cookie"))]
-        NoAuth,
+    #[error(transparent)]
+    Io {
+        #[from]
+        source: io::Error,
+    },
 
-        // TODO: Add more detail here and better display
-        #[snafu(display("{}", source))]
-        WalkDir {
-            source: walkdir::Error,
-        },
+    #[error(transparent)]
+    PngDecode {
+        #[from]
+        source: png::DecodingError,
+    },
 
-        // TODO: Add more detail here and better display
-        #[snafu(display("Path {} was described by more than one glob", path.display()))]
-        OverlappingGlobs {
-            path: PathBuf,
-        },
-
-        #[snafu(display(
-            "Input {} has unsupported png format {:?} (requires RGBA format)",
-            path.display(),
-            format,
-        ))]
-        UnsupportedFormat {
-            path: PathBuf,
-            format: png::ColorType,
-        },
-
-        // TODO: Add more detail here and better display
-        #[snafu(display("{}", source))]
-        PngDecode {
-            source: png::DecodingError,
-        },
-
-        // TODO: Add more detail here and better display
-        #[snafu(display("{}", source))]
-        PngEncode {
-            source: png::EncodingError,
-        },
-    }
-
-    impl From<png::EncodingError> for Error {
-        fn from(source: png::EncodingError) -> Self {
-            Self::PngEncode { source }
-        }
-    }
-
-    impl From<SyncBackendError> for Error {
-        fn from(source: SyncBackendError) -> Self {
-            Self::Backend { source }
-        }
-    }
+    #[error(transparent)]
+    PngEncode {
+        #[from]
+        source: png::EncodingError,
+    },
 }
