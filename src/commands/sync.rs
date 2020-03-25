@@ -25,7 +25,7 @@ use crate::{
     },
 };
 
-pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
+pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError> {
     let fuzzy_config_path = match options.config_path {
         Some(v) => v,
         None => env::current_dir()?,
@@ -43,26 +43,32 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), Error> {
 
     match options.target {
         SyncTarget::Roblox => {
-            let api_client = api_client.as_mut().ok_or(Error::NoAuth)?;
+            let api_client = api_client.as_mut().ok_or(SyncError::NoAuth)?;
             let mut backend = RobloxSyncBackend::new(api_client);
 
-            session.sync_with_backend(&mut backend)?;
+            session.sync_with_backend(&mut backend);
         }
         SyncTarget::None => {
             let mut backend = NoneSyncBackend;
 
-            session.sync_with_backend(&mut backend)?;
+            session.sync_with_backend(&mut backend);
         }
         SyncTarget::Debug => {
             let mut backend = DebugSyncBackend::new();
-            session.sync_with_backend(&mut backend)?;
+            session.sync_with_backend(&mut backend);
         }
     }
 
     session.write_manifest()?;
     session.codegen()?;
 
-    Ok(())
+    if session.sync_errors.is_empty() {
+        Ok(())
+    } else {
+        Err(SyncError::HadErrors {
+            error_count: session.sync_errors.len(),
+        })
+    }
 }
 
 /// A sync session holds all of the state for a single run of the 'tarmac sync'
@@ -82,6 +88,9 @@ struct SyncSession {
 
     /// All of the inputs discovered so far in the current sync.
     inputs: BTreeMap<AssetName, SyncInput>,
+
+    /// Errors encountered during syncing that we ignored at the time.
+    sync_errors: Vec<anyhow::Error>,
 }
 
 /// Contains information to help Tarmac batch process different kinds of assets.
@@ -97,7 +106,7 @@ struct PackedImage {
 }
 
 impl SyncSession {
-    fn new(fuzzy_config_path: &Path) -> Result<Self, Error> {
+    fn new(fuzzy_config_path: &Path) -> Result<Self, SyncError> {
         log::trace!("Starting new sync session");
 
         let root_config = Config::read_from_folder_or_file(&fuzzy_config_path)?;
@@ -114,7 +123,15 @@ impl SyncSession {
             configs: vec![root_config],
             original_manifest,
             inputs: BTreeMap::new(),
+            sync_errors: Vec::new(),
         })
+    }
+
+    /// Raise a sync error that will fail the sync process at a later point.
+    fn raise_error(&mut self, error: impl Into<anyhow::Error>) {
+        let error = error.into();
+        log::error!("{:?}", error);
+        self.sync_errors.push(error);
     }
 
     /// The config that this sync session was started from.
@@ -127,7 +144,7 @@ impl SyncSession {
     /// Tarmac config files can include each other via the `includes` field,
     /// which will search the given path for other config files and use them as
     /// part of the sync.
-    fn discover_configs(&mut self) -> Result<(), Error> {
+    fn discover_configs(&mut self) -> Result<(), SyncError> {
         let mut to_search = VecDeque::new();
         to_search.extend(
             self.root_config()
@@ -196,7 +213,7 @@ impl SyncSession {
     }
 
     /// Find all files on the filesystem referenced as inputs by our configs.
-    fn discover_inputs(&mut self) -> Result<(), Error> {
+    fn discover_inputs(&mut self) -> Result<(), SyncError> {
         let inputs = &mut self.inputs;
 
         // Starting with our root config, iterate over all configs and find all
@@ -230,6 +247,13 @@ impl SyncSession {
                     let contents = fs::read(&path)?;
                     let hash = generate_asset_hash(&contents);
 
+                    // If this input was known during the last sync operation,
+                    // pull the information we knew about it out.
+                    let (id, slice) = match self.original_manifest.inputs.get(&name) {
+                        Some(original) => (original.id, original.slice),
+                        None => (None, None),
+                    };
+
                     let already_found = inputs.insert(
                         name.clone(),
                         SyncInput {
@@ -238,13 +262,13 @@ impl SyncSession {
                             config: input_config.clone(),
                             contents,
                             hash,
-                            id: None,
-                            slice: None,
+                            id,
+                            slice,
                         },
                     );
 
                     if let Some(existing) = already_found {
-                        return Err(Error::OverlappingGlobs {
+                        return Err(SyncError::OverlappingGlobs {
                             path: existing.path,
                         });
                     }
@@ -255,7 +279,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync_with_backend<S: SyncBackend>(&mut self, backend: &mut S) -> Result<(), Error> {
+    fn sync_with_backend<S: SyncBackend>(&mut self, backend: &mut S) {
         let mut compatible_input_groups = BTreeMap::new();
 
         for (input_name, input) in &self.inputs {
@@ -280,18 +304,20 @@ impl SyncSession {
 
         for (kind, group) in compatible_input_groups {
             if kind.packable {
-                self.sync_packable_images(backend, group)?;
+                if let Err(err) = self.sync_packable_images(backend, group) {
+                    self.raise_error(err);
+                }
             } else {
                 for input_name in group {
-                    self.sync_unpackable_image(backend, &input_name)?;
+                    if let Err(err) = self.sync_unpackable_image(backend, &input_name) {
+                        self.raise_error(err);
+                    }
                 }
             }
         }
 
         // TODO: Clean up output of inputs that were present in the previous
         // sync but are no longer present.
-
-        Ok(())
     }
 
     fn sync_packable_images<S: SyncBackend>(
@@ -301,14 +327,6 @@ impl SyncSession {
     ) -> Result<(), SyncError> {
         if self.are_inputs_unchanged(&group) {
             log::info!("Skipping image packing as all inputs are unchanged.");
-
-            for name in &group {
-                let input = self.inputs.get_mut(name).unwrap();
-                let manifest = &self.original_manifest.inputs[name];
-
-                input.id = manifest.id;
-                input.slice = manifest.slice;
-            }
 
             return Ok(());
         }
@@ -429,7 +447,7 @@ impl SyncSession {
         &mut self,
         backend: &mut S,
         input_name: &AssetName,
-    ) -> Result<(), Error> {
+    ) -> Result<(), SyncError> {
         let input = self.inputs.get_mut(input_name).unwrap();
 
         let upload_data = UploadInfo {
@@ -449,7 +467,7 @@ impl SyncSession {
                 log::trace!("Contents changed...");
 
                 backend.upload(upload_data)?.id
-            } else if let Some(prev_id) = input_manifest.id {
+            } else if input.id.is_some() {
                 // The file's contents are the same as the previous sync and
                 // this image has been uploaded previously.
 
@@ -466,9 +484,8 @@ impl SyncSession {
                 } else {
                     // Nothing has changed, we're good to go!
 
-                    log::trace!("Input is unchanged");
-
-                    prev_id
+                    log::trace!("Input is unchanged.");
+                    return Ok(());
                 }
             } else {
                 // This image has never been uploaded, but its hash is present
@@ -491,7 +508,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn write_manifest(&self) -> Result<(), Error> {
+    fn write_manifest(&self) -> Result<(), SyncError> {
         log::trace!("Generating new manifest");
 
         let mut manifest = Manifest::default();
@@ -518,7 +535,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn codegen(&self) -> Result<(), Error> {
+    fn codegen(&self) -> Result<(), SyncError> {
         log::trace!("Starting codegen");
 
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -567,15 +584,16 @@ fn generate_asset_hash(content: &[u8]) -> String {
     format!("{}", blake3::hash(content).to_hex())
 }
 
-pub use Error as SyncError;
-
 #[derive(Debug, Error)]
-pub enum Error {
+pub enum SyncError {
     #[error("Path {} was described by more than one glob", .path.display())]
     OverlappingGlobs { path: PathBuf },
 
-    #[error("'tarmac sync' requires an authentication cookie")]
+    #[error("'tarmac sync' requires an authentication cookie to upload to Roblox")]
     NoAuth,
+
+    #[error("'tarmac sync' completed, but with {error_count} error(s)")]
+    HadErrors { error_count: usize },
 
     #[error(transparent)]
     WalkDir {
