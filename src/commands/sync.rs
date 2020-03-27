@@ -471,9 +471,7 @@ impl SyncSession {
                 // The file's contents are the same as the previous sync and
                 // this image has been uploaded previously.
 
-                if input_manifest.packable != input.config.packable
-                    || input_manifest.codegen != input.config.codegen
-                {
+                if input_manifest.packable != input.config.packable {
                     // Only the file's config has changed.
                     //
                     // TODO: We might not need to reupload this image?
@@ -524,7 +522,6 @@ impl SyncSession {
                         id: input.id,
                         slice: input.slice,
                         packable: input.config.packable,
-                        codegen: input.config.codegen,
                     },
                 )
             })

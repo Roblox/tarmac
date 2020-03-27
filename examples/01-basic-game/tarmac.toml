@@ -11,7 +11,6 @@ name = "01-basic-game"
 # https://docs.rs/globset/0.4.4/globset/#syntax
 glob = "assets/**/*.png"
 
-# Tells Tarmac what kind of link files to generate.
-# This option creates `ModuleScript` instances that return asset URLs.
-codegen = "asset-url"
+# Tells Tarmac to generate links to our assets in src/assets.lua.
+codegen = true
 codegen-path = "src/assets.lua"

@@ -11,8 +11,8 @@ use std::{
 use fs_err::File;
 
 use crate::{
+    data::ImageSlice,
     data::SyncInput,
-    data::{CodegenKind, ImageSlice},
     lua_ast::{Expression, Statement, Table},
 };
 
@@ -107,30 +107,26 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
 
                 Some(Expression::table(entries))
             }
-            Item::Input(input) => match input.config.codegen {
-                Some(CodegenKind::AssetUrl) => {
+            Item::Input(input) => {
+                if input.config.codegen {
                     if let Some(id) = input.id {
-                        let template = AssetUrlTemplate { id };
+                        if input.slice.is_some() {
+                            let template = UrlAndSliceTemplate {
+                                id,
+                                slice: input.slice,
+                            };
 
-                        Some(template.to_lua())
-                    } else {
-                        None
+                            return Some(template.to_lua());
+                        } else {
+                            let template = AssetUrlTemplate { id };
+
+                            return Some(template.to_lua());
+                        }
                     }
                 }
-                Some(CodegenKind::UrlAndSlice) => {
-                    if let Some(id) = input.id {
-                        let template = UrlAndSliceTemplate {
-                            id,
-                            slice: input.slice,
-                        };
 
-                        Some(template.to_lua())
-                    } else {
-                        None
-                    }
-                }
-                None => None,
-            },
+                None
+            }
         }
     }
 
@@ -148,41 +144,35 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
 /// defined, and so generate individual files.
 fn codegen_individual(inputs: &[&SyncInput]) -> io::Result<()> {
     for input in inputs {
-        if let Some(codegen) = input.config.codegen {
-            let maybe_expression = match codegen {
-                CodegenKind::AssetUrl => {
-                    if let Some(id) = input.id {
-                        let template = AssetUrlTemplate { id };
+        let maybe_expression = if input.config.codegen {
+            if let Some(id) = input.id {
+                if input.slice.is_some() {
+                    let template = UrlAndSliceTemplate {
+                        id,
+                        slice: input.slice,
+                    };
 
-                        Some(template.to_lua())
-                    } else {
-                        None
-                    }
+                    Some(template.to_lua())
+                } else {
+                    let template = AssetUrlTemplate { id };
+
+                    Some(template.to_lua())
                 }
-
-                CodegenKind::UrlAndSlice => {
-                    if let Some(id) = input.id {
-                        let template = UrlAndSliceTemplate {
-                            id,
-                            slice: input.slice,
-                        };
-
-                        Some(template.to_lua())
-                    } else {
-                        None
-                    }
-                }
-            };
-
-            if let Some(expression) = maybe_expression {
-                let ast = Statement::Return(expression);
-
-                let path = input.path.with_extension("lua");
-
-                let mut file = File::create(path)?;
-                writeln!(file, "{}", CODEGEN_HEADER)?;
-                write!(file, "{}", ast)?;
+            } else {
+                None
             }
+        } else {
+            None
+        };
+
+        if let Some(expression) = maybe_expression {
+            let ast = Statement::Return(expression);
+
+            let path = input.path.with_extension("lua");
+
+            let mut file = File::create(path)?;
+            writeln!(file, "{}", CODEGEN_HEADER)?;
+            write!(file, "{}", ast)?;
         }
     }
 

@@ -114,10 +114,10 @@ pub struct InputConfig {
     /// group of inputs.
     pub glob: Glob,
 
-    /// What kind of extra links Tarmac should generate when these assets are
-    /// consumed in a project.
+    /// Defines whether Tarmac should generate code to import the assets
+    /// associated with this group of inputs.
     #[serde(default)]
-    pub codegen: Option<CodegenKind>,
+    pub codegen: bool,
 
     /// If specified, batches together all of the generated code for this group
     /// of inputs into a single file created at this path.
@@ -136,27 +136,6 @@ pub struct InputConfig {
     /// instances.
     #[serde(default)]
     pub packable: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum CodegenKind {
-    /// Emit Lua files that return asset URLs as a string.
-    ///
-    /// This option is useful for images that will never be packed into a
-    /// spritesheet, like `Decal` objects on parts.
-    AssetUrl,
-
-    /// Emit Lua files that return a table containing the asset URL, along with
-    /// offset and size if the image was packed into a spritesheet.
-    ///
-    /// The properties in this table are laid out in the same way as the
-    /// properties on `ImageLabel` and `ImageButton`:
-    ///
-    /// * `Image` (string)
-    /// * `ImageRectOffset` (Vector2)
-    /// * `ImageRectSize` (Vector2)
-    UrlAndSlice,
 }
 
 #[derive(Debug, Error)]
