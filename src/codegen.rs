@@ -11,8 +11,8 @@ use std::{
 use fs_err::File;
 
 use crate::{
+    data::ImageSlice,
     data::SyncInput,
-    data::{CodegenKind, ImageSlice},
     lua_ast::{Expression, Statement, Table},
 };
 
@@ -107,30 +107,23 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
 
                 Some(Expression::table(entries))
             }
-            Item::Input(input) => match input.config.codegen {
-                Some(CodegenKind::AssetUrl) => {
+            Item::Input(input) => {
+                if input.config.codegen {
                     if let Some(id) = input.id {
-                        let template = AssetUrlTemplate { id };
+                        if let Some(slice) = input.slice {
+                            let template = UrlAndSliceTemplate { id, slice };
 
-                        Some(template.to_lua())
-                    } else {
-                        None
+                            return Some(template.to_lua());
+                        } else {
+                            let template = AssetUrlTemplate { id };
+
+                            return Some(template.to_lua());
+                        }
                     }
                 }
-                Some(CodegenKind::UrlAndSlice) => {
-                    if let Some(id) = input.id {
-                        let template = UrlAndSliceTemplate {
-                            id,
-                            slice: input.slice,
-                        };
 
-                        Some(template.to_lua())
-                    } else {
-                        None
-                    }
-                }
-                None => None,
-            },
+                None
+            }
         }
     }
 
@@ -148,41 +141,32 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
 /// defined, and so generate individual files.
 fn codegen_individual(inputs: &[&SyncInput]) -> io::Result<()> {
     for input in inputs {
-        if let Some(codegen) = input.config.codegen {
-            let maybe_expression = match codegen {
-                CodegenKind::AssetUrl => {
-                    if let Some(id) = input.id {
-                        let template = AssetUrlTemplate { id };
+        let maybe_expression = if input.config.codegen {
+            if let Some(id) = input.id {
+                if let Some(slice) = input.slice {
+                    let template = UrlAndSliceTemplate { id, slice };
 
-                        Some(template.to_lua())
-                    } else {
-                        None
-                    }
+                    Some(template.to_lua())
+                } else {
+                    let template = AssetUrlTemplate { id };
+
+                    Some(template.to_lua())
                 }
-
-                CodegenKind::UrlAndSlice => {
-                    if let Some(id) = input.id {
-                        let template = UrlAndSliceTemplate {
-                            id,
-                            slice: input.slice,
-                        };
-
-                        Some(template.to_lua())
-                    } else {
-                        None
-                    }
-                }
-            };
-
-            if let Some(expression) = maybe_expression {
-                let ast = Statement::Return(expression);
-
-                let path = input.path.with_extension("lua");
-
-                let mut file = File::create(path)?;
-                writeln!(file, "{}", CODEGEN_HEADER)?;
-                write!(file, "{}", ast)?;
+            } else {
+                None
             }
+        } else {
+            None
+        };
+
+        if let Some(expression) = maybe_expression {
+            let ast = Statement::Return(expression);
+
+            let path = input.path.with_extension("lua");
+
+            let mut file = File::create(path)?;
+            writeln!(file, "{}", CODEGEN_HEADER)?;
+            write!(file, "{}", ast)?;
         }
     }
 
@@ -202,29 +186,25 @@ impl AssetUrlTemplate {
 
 pub(crate) struct UrlAndSliceTemplate {
     pub id: u64,
-    pub slice: Option<ImageSlice>,
+    pub slice: ImageSlice,
 }
 
 impl UrlAndSliceTemplate {
     fn to_lua(&self) -> Expression {
+        let offset = self.slice.min();
+        let size = self.slice.size();
+
         let mut table = Table::new();
-
         table.add_entry("Image", format!("rbxassetid://{}", self.id));
+        table.add_entry(
+            "ImageRectOffset",
+            Expression::Raw(format!("Vector2.new({}, {})", offset.0, offset.1)),
+        );
 
-        if let Some(slice) = self.slice {
-            let offset = slice.min();
-            let size = slice.size();
-
-            table.add_entry(
-                "ImageRectOffset",
-                Expression::Raw(format!("Vector2.new({}, {})", offset.0, offset.1)),
-            );
-
-            table.add_entry(
-                "ImageRectSize",
-                Expression::Raw(format!("Vector2.new({}, {})", size.0, size.1)),
-            );
-        }
+        table.add_entry(
+            "ImageRectSize",
+            Expression::Raw(format!("Vector2.new({}, {})", size.0, size.1)),
+        );
 
         Expression::Table(table)
     }

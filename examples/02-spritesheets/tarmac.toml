@@ -8,9 +8,7 @@ base-path = "pack-these"
 # packed into spritesheets.
 packable = true
 
-# It's recommended to use a codegen strategy that includes spritesheet
-# information when dealing with packable images!
-codegen = "url-and-slice"
+codegen = true
 codegen-path = "pack-these/init.lua"
 
 [[inputs]]
@@ -19,6 +17,4 @@ glob = "dont-pack-these/**/*.png"
 # packable defaults to false, but we can also explicitly specify it.
 packable = false
 
-# We can use the same codegen as spritesheet images would if we like. This helps
-# keep forward compatibility if we decide to pack these images in the future.
-codegen = "url-and-slice"
+codegen = true

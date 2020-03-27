@@ -8,7 +8,7 @@ use fs_err as fs;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{asset_name::AssetName, data::config::CodegenKind};
+use crate::asset_name::AssetName;
 
 static MANIFEST_FILENAME: &str = "tarmac-manifest.toml";
 
@@ -64,10 +64,6 @@ pub struct InputManifest {
     /// Whether the config applied to this input asked for it to be packed into
     /// a spritesheet.
     pub packable: bool,
-
-    /// The kind of Lua code that was generated during the last sync for this
-    /// input.
-    pub codegen: Option<CodegenKind>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
