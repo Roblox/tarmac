@@ -1,6 +1,7 @@
 # Tarmac Changelog
 
 ## Unreleased Changes
+* **Breaking**: Codegen is no longer configurable. The correct codegen style is now chosen based on the kind of input. ([#28](https://github.com/rojo-rbx/tarmac/pull/28))
 * Removed (unimplemented) `content-folder` target and added `none` target.
 	* This target always fails to upload, and is useful to verify that all assets have been uploaded as part of a CI job.
 
