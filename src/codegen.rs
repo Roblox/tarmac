@@ -110,11 +110,8 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
             Item::Input(input) => {
                 if input.config.codegen {
                     if let Some(id) = input.id {
-                        if input.slice.is_some() {
-                            let template = UrlAndSliceTemplate {
-                                id,
-                                slice: input.slice,
-                            };
+                        if let Some(slice) = input.slice {
+                            let template = UrlAndSliceTemplate { id, slice };
 
                             return Some(template.to_lua());
                         } else {
@@ -146,11 +143,8 @@ fn codegen_individual(inputs: &[&SyncInput]) -> io::Result<()> {
     for input in inputs {
         let maybe_expression = if input.config.codegen {
             if let Some(id) = input.id {
-                if input.slice.is_some() {
-                    let template = UrlAndSliceTemplate {
-                        id,
-                        slice: input.slice,
-                    };
+                if let Some(slice) = input.slice {
+                    let template = UrlAndSliceTemplate { id, slice };
 
                     Some(template.to_lua())
                 } else {
@@ -192,29 +186,25 @@ impl AssetUrlTemplate {
 
 pub(crate) struct UrlAndSliceTemplate {
     pub id: u64,
-    pub slice: Option<ImageSlice>,
+    pub slice: ImageSlice,
 }
 
 impl UrlAndSliceTemplate {
     fn to_lua(&self) -> Expression {
+        let offset = self.slice.min();
+        let size = self.slice.size();
+
         let mut table = Table::new();
-
         table.add_entry("Image", format!("rbxassetid://{}", self.id));
+        table.add_entry(
+            "ImageRectOffset",
+            Expression::Raw(format!("Vector2.new({}, {})", offset.0, offset.1)),
+        );
 
-        if let Some(slice) = self.slice {
-            let offset = slice.min();
-            let size = slice.size();
-
-            table.add_entry(
-                "ImageRectOffset",
-                Expression::Raw(format!("Vector2.new({}, {})", offset.0, offset.1)),
-            );
-
-            table.add_entry(
-                "ImageRectSize",
-                Expression::Raw(format!("Vector2.new({}, {})", size.0, size.1)),
-            );
-        }
+        table.add_entry(
+            "ImageRectSize",
+            Expression::Raw(format!("Vector2.new({}, {})", size.0, size.1)),
+        );
 
         Expression::Table(table)
     }
