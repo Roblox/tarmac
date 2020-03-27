@@ -56,6 +56,7 @@ proxy_display!(Block);
 
 pub(crate) enum Statement {
     Return(Expression),
+    If(IfBlock),
 }
 
 impl FmtLua for Statement {
@@ -65,11 +66,44 @@ impl FmtLua for Statement {
                 write!(output, "return ")?;
                 literal.fmt_lua(output)
             }
+            Self::If(if_block) => {
+                write!(output, "if ")?;
+                if_block.condition.fmt_lua(output)?;
+                writeln!(output, " then")?;
+                output.indent();
+                if_block.body.fmt_lua(output)?;
+                output.unindent();
+
+                for (condition, block) in &if_block.else_if_blocks {
+                    write!(output, "elseif ")?;
+                    condition.fmt_lua(output)?;
+                    writeln!(output, " then")?;
+                    output.indent();
+                    block.fmt_lua(output)?;
+                    output.unindent();
+                }
+
+                if let Some(block) = &if_block.else_block {
+                    writeln!(output, "else")?;
+                    output.indent();
+                    block.fmt_lua(output)?;
+                    output.unindent();
+                }
+
+                writeln!(output, "end")
+            }
         }
     }
 }
 
 proxy_display!(Statement);
+
+pub(crate) struct IfBlock {
+    condition: Expression,
+    body: Block,
+    else_if_blocks: Vec<(Expression, Block)>,
+    else_block: Option<Block>,
+}
 
 pub(crate) enum Expression {
     String(String),
