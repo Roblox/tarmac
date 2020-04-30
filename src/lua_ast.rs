@@ -144,6 +144,12 @@ impl From<String> for Expression {
     }
 }
 
+impl From<&'_ String> for Expression {
+    fn from(value: &String) -> Self {
+        Self::String(value.clone())
+    }
+}
+
 impl From<&'_ str> for Expression {
     fn from(value: &str) -> Self {
         Self::String(value.to_owned())
