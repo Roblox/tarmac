@@ -18,7 +18,7 @@ use crate::{
     dpi_scale::dpi_scale_for_path,
     image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
-    roblox_web_api::RobloxApiClient,
+    roblox_web_api::{RobloxApiClient, RobloxApiError},
     sync_backend::{
         DebugSyncBackend, Error as SyncBackendError, NoneSyncBackend, RobloxSyncBackend,
         SyncBackend, UploadInfo,
@@ -31,10 +31,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
         None => env::current_dir()?,
     };
 
-    let mut api_client = global
-        .auth
-        .or_else(get_auth_cookie)
-        .map(RobloxApiClient::new);
+    let mut api_client = RobloxApiClient::new(global.auth.or_else(get_auth_cookie));
 
     let mut session = SyncSession::new(&fuzzy_config_path)?;
 
@@ -43,8 +40,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
 
     match options.target {
         SyncTarget::Roblox => {
-            let api_client = api_client.as_mut().ok_or(SyncError::NoAuth)?;
-            let mut backend = RobloxSyncBackend::new(api_client);
+            let mut backend = RobloxSyncBackend::new(&mut api_client);
 
             session.sync_with_backend(&mut backend);
         }
@@ -61,6 +57,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
 
     session.write_manifest()?;
     session.codegen()?;
+    session.populate_asset_cache(&mut api_client)?;
 
     if session.sync_errors.is_empty() {
         Ok(())
@@ -566,6 +563,42 @@ impl SyncSession {
 
         Ok(())
     }
+
+    fn populate_asset_cache(&self, api_client: &mut RobloxApiClient) -> Result<(), SyncError> {
+        let cache_path = match &self.root_config().asset_cache_path {
+            Some(path) => path,
+            None => return Ok(()),
+        };
+
+        log::debug!("Populating asset cache");
+
+        fs_err::create_dir_all(&cache_path)?;
+
+        for input in self.inputs.values() {
+            if let Some(id) = input.id {
+                let input_path = cache_path.join(format!("{}", id));
+
+                match fs_err::metadata(&input_path) {
+                    Ok(_) => {
+                        // This asset is already downloaded, we can skip it.
+                        continue;
+                    }
+                    Err(err) => {
+                        if err.kind() != io::ErrorKind::NotFound {
+                            return Err(err.into());
+                        }
+                    }
+                }
+
+                log::debug!("Downloading asset ID {}", id);
+
+                let contents = api_client.download_image(id)?;
+                fs_err::write(input_path, contents)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 fn is_image_asset(path: &Path) -> bool {
@@ -585,9 +618,6 @@ fn generate_asset_hash(content: &[u8]) -> String {
 pub enum SyncError {
     #[error("Path {} was described by more than one glob", .path.display())]
     OverlappingGlobs { path: PathBuf },
-
-    #[error("'tarmac sync' requires an authentication cookie to upload to Roblox")]
-    NoAuth,
 
     #[error("'tarmac sync' completed, but with {error_count} error(s)")]
     HadErrors { error_count: usize },
@@ -632,5 +662,11 @@ pub enum SyncError {
     PngEncode {
         #[from]
         source: png::EncodingError,
+    },
+
+    #[error(transparent)]
+    RobloxApi {
+        #[from]
+        source: RobloxApiError,
     },
 }

@@ -17,7 +17,7 @@ pub fn upload_image(global: GlobalOptions, options: UploadImageOptions) {
 
     let image_data = fs::read(options.path).expect("couldn't read input file");
 
-    let mut client = RobloxApiClient::new(auth);
+    let mut client = RobloxApiClient::new(Some(auth));
 
     let upload_data = ImageUploadData {
         image_data: Cow::Owned(image_data),

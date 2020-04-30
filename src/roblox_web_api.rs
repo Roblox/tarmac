@@ -23,7 +23,7 @@ pub struct UploadResponse {
 }
 
 pub struct RobloxApiClient {
-    auth_token: String,
+    auth_token: Option<String>,
     csrf_token: Option<HeaderValue>,
     client: Client,
 }
@@ -35,12 +35,24 @@ impl fmt::Debug for RobloxApiClient {
 }
 
 impl RobloxApiClient {
-    pub fn new(auth_token: String) -> Self {
+    pub fn new(auth_token: Option<String>) -> Self {
         Self {
             auth_token,
             csrf_token: None,
             client: Client::new(),
         }
+    }
+
+    pub fn download_image(&mut self, id: u64) -> Result<Vec<u8>, RobloxApiError> {
+        let url = format!("https://roblox.com/asset?id={}", id);
+
+        let mut response =
+            self.execute_with_csrf_retry(|client| Ok(client.get(&url).build()?))?;
+
+        let mut buffer = Vec::new();
+        response.copy_to(&mut buffer)?;
+
+        Ok(buffer)
     }
 
     pub fn upload_image(
@@ -98,12 +110,14 @@ impl RobloxApiClient {
     }
 
     fn attach_headers(&self, request: &mut Request) {
-        let cookie_value = format!(".ROBLOSECURITY={}", self.auth_token);
+        if let Some(auth_token) = &self.auth_token {
+            let cookie_value = format!(".ROBLOSECURITY={}", auth_token);
 
-        request.headers_mut().insert(
-            COOKIE,
-            HeaderValue::from_bytes(cookie_value.as_bytes()).unwrap(),
-        );
+            request.headers_mut().insert(
+                COOKIE,
+                HeaderValue::from_bytes(cookie_value.as_bytes()).unwrap(),
+            );
+        }
 
         if let Some(csrf) = &self.csrf_token {
             request.headers_mut().insert("X-CSRF-Token", csrf.clone());

@@ -26,6 +26,10 @@ pub struct Config {
     #[serde(default = "default_max_spritesheet_size")]
     pub max_spritesheet_size: (u32, u32),
 
+    /// A path to a folder where any assets contained in the project should be
+    /// stored. Each asset's name will match its asset ID.
+    pub asset_cache_path: Option<PathBuf>,
+
     /// A list of other Tarmac config files that should be owned by this one.
     #[serde(default)]
     pub includes: Vec<IncludeConfig>,
@@ -81,6 +85,10 @@ impl Config {
     /// Turn all relative paths referenced from this config into absolute paths.
     fn make_paths_absolute(&mut self) {
         let base = self.file_path.parent().unwrap();
+
+        if let Some(cache_path) = self.asset_cache_path.as_mut() {
+            make_absolute(cache_path, base);
+        }
 
         for include in &mut self.includes {
             make_absolute(&mut include.path, base);
