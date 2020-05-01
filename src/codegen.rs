@@ -3,7 +3,7 @@
 //! Tarmac uses a small Lua AST to build up generated code.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     io::{self, Write},
     path::{self, Path},
 };
@@ -27,22 +27,33 @@ pub fn perform_codegen(output_path: Option<&Path>, inputs: &[&SyncInput]) -> io:
     }
 }
 
+/// Tree used to track and group inputs hierarchically, before turning them into
+/// Lua tables.
+enum GroupedItem<'a> {
+    Folder {
+        children_by_name: BTreeMap<String, GroupedItem<'a>>,
+    },
+    InputGroup {
+        inputs_by_dpi_scale: HashMap<u32, &'a SyncInput>,
+    },
+}
+
 /// Perform codegen for a group of inputs who have `codegen_path` defined.
 ///
 /// We'll build up a Lua file containing nested tables that match the structure
 /// of the input's path with its base path stripped away.
 fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> {
-    /// Represents the tree of inputs as we're discovering them.
-    enum Item<'a> {
-        Folder(BTreeMap<&'a str, Item<'a>>),
-        Input(&'a SyncInput),
-    }
-
-    let mut root_folder: BTreeMap<&str, Item<'_>> = BTreeMap::new();
+    let mut root_folder: BTreeMap<String, GroupedItem<'_>> = BTreeMap::new();
 
     // First, collect all of the inputs and group them together into a tree
     // according to their relative paths.
-    for input in inputs {
+    for &input in inputs {
+        // Not all inputs will be marked for codegen. We can eliminate those
+        // right away.
+        if !input.config.codegen {
+            continue;
+        }
+
         // If we can't construct a relative path, there isn't a sensible name
         // that we can use to refer to this input.
         let relative_path = input
@@ -65,69 +76,97 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
 
         // Navigate down the tree, creating any folder entries that don't exist
         // yet.
-        //
-        // This is basically an in-memory `mkdir -p` followed by `touch`.
         let mut current_dir = &mut root_folder;
         for (i, segment) in segments.iter().enumerate() {
             if i == segments.len() - 1 {
                 // We assume that the last segment of a path must be a file.
 
-                let name = segment.file_stem().unwrap().to_str().unwrap();
-                current_dir.insert(name, Item::Input(input));
+                let name = &input.stem_name;
+
+                let input_group = match current_dir.get_mut(name) {
+                    Some(existing) => existing,
+                    None => {
+                        let input_group = GroupedItem::InputGroup {
+                            inputs_by_dpi_scale: HashMap::new(),
+                        };
+                        current_dir.insert(name.to_owned(), input_group);
+                        current_dir.get_mut(name).unwrap()
+                    }
+                };
+
+                if let GroupedItem::InputGroup {
+                    inputs_by_dpi_scale,
+                } = input_group
+                {
+                    inputs_by_dpi_scale.insert(input.dpi_scale, input);
+                } else {
+                    unreachable!();
+                }
             } else {
-                let name = segment.to_str().unwrap();
+                let name = segment.to_str().unwrap().to_owned();
                 let next_entry = current_dir
                     .entry(name)
-                    .or_insert_with(|| Item::Folder(BTreeMap::new()));
+                    .or_insert_with(|| GroupedItem::Folder {
+                        children_by_name: BTreeMap::new(),
+                    });
 
-                match next_entry {
-                    Item::Folder(next_dir) => {
-                        current_dir = next_dir;
-                    }
-                    Item::Input(_) => {
-                        log::error!(
-                            "A path tried to traverse through a folder as if it were a file: {}",
-                            input.path.display()
-                        );
-                        log::error!("The path segment '{}' is a file because of previous inputs, not a file.", name);
-                        break;
-                    }
+                if let GroupedItem::Folder { children_by_name } = next_entry {
+                    current_dir = children_by_name;
+                } else {
+                    unreachable!();
                 }
             }
         }
     }
 
-    fn build_item(item: &Item<'_>) -> Option<Expression> {
+    fn build_item(item: &GroupedItem<'_>) -> Option<Expression> {
         match item {
-            Item::Folder(children) => {
-                let entries = children
+            GroupedItem::Folder { children_by_name } => {
+                let entries = children_by_name
                     .iter()
-                    .filter_map(|(&name, child)| build_item(child).map(|item| (name.into(), item)))
+                    .filter_map(|(name, child)| build_item(child).map(|item| (name.into(), item)))
                     .collect();
 
                 Some(Expression::table(entries))
             }
-            Item::Input(input) => {
-                if input.config.codegen {
+            GroupedItem::InputGroup {
+                inputs_by_dpi_scale,
+            } => {
+                if inputs_by_dpi_scale.len() == 1 {
+                    // If there is exactly one input in this group, we can
+                    // generate code knowing that there are no high DPI variants
+                    // to choose from.
+
+                    let input = inputs_by_dpi_scale.values().next().unwrap();
+
                     if let Some(id) = input.id {
                         if let Some(slice) = input.slice {
                             let template = UrlAndSliceTemplate { id, slice };
 
-                            return Some(template.to_lua());
+                            Some(template.to_lua())
                         } else {
                             let template = AssetUrlTemplate { id };
 
-                            return Some(template.to_lua());
+                            Some(template.to_lua())
                         }
+                    } else {
+                        None
                     }
-                }
+                } else {
+                    // In this case, we have the same asset in multiple
+                    // different DPI scales. We can generate code to pick
+                    // between them at runtime.
 
-                None
+                    unimplemented!()
+                }
             }
         }
     }
 
-    let root_item = build_item(&Item::Folder(root_folder)).unwrap();
+    let root_item = build_item(&GroupedItem::Folder {
+        children_by_name: root_folder,
+    })
+    .unwrap();
     let ast = Statement::Return(root_item);
 
     let mut file = File::create(output_path)?;

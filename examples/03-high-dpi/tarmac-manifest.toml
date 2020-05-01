@@ -1,0 +1,14 @@
+[inputs."assets/hello.png"]
+hash = "55ef7fd70ec96da73fa0f09bf530605961cce1a654f02684a1a0b0a6234b06cb"
+id = 4967166732
+packable = false
+
+[inputs."assets/hello@2x.png"]
+hash = "02845c418d2c3abe798d1babeecc2e124dddc4765a840cd03d171f32351be3af"
+id = 4967220902
+packable = false
+
+[inputs."assets/hello@3x.png"]
+hash = "1d075da844e76c9e3ec924c1a7fa8efaedbf35787038063664ef939470d7f57c"
+id = 4967220945
+packable = false

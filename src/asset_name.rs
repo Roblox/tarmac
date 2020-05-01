@@ -35,12 +35,6 @@ impl AssetName {
         AssetName(displayed.into())
     }
 
-    /// Spritesheets don't have any canonical name provided by Tarmac's inputs;
-    /// when we upload them, we want to give them a simple dummy name
-    pub fn spritesheet() -> Self {
-        AssetName("spritesheet.png".into())
-    }
-
     #[cfg(test)]
     pub(crate) fn new<S: AsRef<str>>(inner: S) -> Self {
         Self(inner.as_ref().into())

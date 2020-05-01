@@ -3,10 +3,7 @@ use std::{borrow::Cow, io, path::Path};
 use fs_err as fs;
 use thiserror::Error;
 
-use crate::{
-    asset_name::AssetName,
-    roblox_web_api::{ImageUploadData, RobloxApiClient, RobloxApiError},
-};
+use crate::roblox_web_api::{ImageUploadData, RobloxApiClient, RobloxApiError};
 
 pub trait SyncBackend {
     fn upload(&mut self, data: UploadInfo) -> Result<UploadResponse, Error>;
@@ -17,7 +14,7 @@ pub struct UploadResponse {
 }
 
 pub struct UploadInfo {
-    pub name: AssetName,
+    pub name: String,
     pub contents: Vec<u8>,
     pub hash: String,
 }
@@ -38,7 +35,7 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
 
         let response = self.api_client.upload_image(ImageUploadData {
             image_data: Cow::Owned(data.contents),
-            name: data.name.as_ref(),
+            name: &data.name,
             description: "Uploaded by Tarmac.",
         })?;
 
@@ -82,12 +79,7 @@ impl SyncBackend for DebugSyncBackend {
         let path = Path::new(".tarmac-debug");
         fs::create_dir_all(path)?;
 
-        let mut file_path = path.join(id.to_string());
-
-        if let Some(ext) = Path::new(data.name.as_ref()).extension() {
-            file_path.set_extension(ext);
-        }
-
+        let file_path = path.join(id.to_string());
         fs::write(&file_path, &data.contents)?;
 
         Ok(UploadResponse { id })

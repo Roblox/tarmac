@@ -11,13 +11,21 @@ use crate::{
 /// results of network I/O, and from the previous Tarmac manifest file.
 #[derive(Debug)]
 pub struct SyncInput {
+    /// A unique name for this asset in the project.
     pub name: AssetName,
+
+    /// A non-unique name for this asset, excluding file extension and DPI scale
+    /// identifier, if present.
+    pub stem_name: String,
 
     /// The path on disk to the file this input originated from.
     pub path: PathBuf,
 
     /// The configuration that applied to this input when it was discovered.
     pub config: InputConfig,
+
+    /// The DPI scale of this input, if it makes sense for this input type.
+    pub dpi_scale: u32,
 
     /// The contents of the file this input originated from.
     pub contents: Vec<u8>,
