@@ -108,6 +108,7 @@ pub(crate) struct IfBlock {
 pub(crate) enum Expression {
     String(String),
     Table(Table),
+    Function(Function),
 
     /// Used as a catch-all for when this module doesn't define a primitive we
     /// need for codegen.
@@ -125,6 +126,7 @@ impl FmtLua for Expression {
         match self {
             Self::Table(inner) => inner.fmt_lua(output),
             Self::String(inner) => inner.fmt_lua(output),
+            Self::Function(inner) => inner.fmt_lua(output),
             Self::Raw(inner) => output.write_str(inner),
         }
     }
@@ -133,6 +135,7 @@ impl FmtLua for Expression {
         match self {
             Self::Table(inner) => inner.fmt_table_key(output),
             Self::String(inner) => inner.fmt_table_key(output),
+            Self::Function(inner) => inner.fmt_table_key(output),
             Self::Raw(inner) => output.write_str(inner),
         }
     }
@@ -231,6 +234,26 @@ fn is_valid_ident(value: &str) -> bool {
     }
 
     chars.all(is_valid_ident_char)
+}
+
+pub(crate) struct Function {
+    pub args: String,
+    pub body: Vec<Statement>,
+}
+
+impl FmtLua for Function {
+    fn fmt_lua(&self, output: &mut LuaStream<'_>) -> fmt::Result {
+        writeln!(output, "function({})", self.args)?;
+        output.indent();
+
+        for statement in &self.body {
+            statement.fmt_lua(output)?;
+            writeln!(output)?;
+        }
+
+        output.unindent();
+        write!(output, "end")
+    }
 }
 
 /// Wraps a `fmt::Write` with additional tracking to do pretty-printing of Lua.
