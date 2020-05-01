@@ -14,18 +14,18 @@ pub struct SyncInput {
     /// A unique name for this asset in the project.
     pub name: AssetName,
 
-    /// A non-unique name for this asset, excluding file extension and DPI scale
-    /// identifier, if present.
-    pub stem_name: String,
-
     /// The path on disk to the file this input originated from.
     pub path: PathBuf,
 
-    /// The configuration that applied to this input when it was discovered.
-    pub config: InputConfig,
+    /// The input's path with DPI scale information stripped away. This is used
+    /// to group inputs that are just DPI variations of eachother.
+    pub path_without_dpi_scale: PathBuf,
 
     /// The DPI scale of this input, if it makes sense for this input type.
     pub dpi_scale: u32,
+
+    /// The configuration that applied to this input when it was discovered.
+    pub config: InputConfig,
 
     /// The contents of the file this input originated from.
     pub contents: Vec<u8>,
@@ -45,5 +45,21 @@ pub struct SyncInput {
 impl SyncInput {
     pub fn is_unchanged_since_last_sync(&self, old_manifest: &InputManifest) -> bool {
         self.hash == old_manifest.hash && self.config.packable == old_manifest.packable
+    }
+
+    /// Creates a non-unique, human-friendly name to refer to this input.
+    pub fn human_name(&self) -> String {
+        let file_stem = self
+            .path_without_dpi_scale
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap();
+
+        if self.path == self.path_without_dpi_scale {
+            file_stem.to_owned()
+        } else {
+            format!("{} ({}x)", file_stem, self.dpi_scale)
+        }
     }
 }

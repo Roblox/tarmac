@@ -257,10 +257,10 @@ impl SyncSession {
                         name.clone(),
                         SyncInput {
                             name,
-                            stem_name: path_info.file_stem,
                             path,
-                            config: input_config.clone(),
+                            path_without_dpi_scale: path_info.path_without_dpi_scale,
                             dpi_scale: path_info.dpi_scale,
+                            config: input_config.clone(),
                             contents,
                             hash,
                             id,
@@ -452,7 +452,7 @@ impl SyncSession {
         let input = self.inputs.get_mut(input_name).unwrap();
 
         let upload_data = UploadInfo {
-            name: input.stem_name.clone(),
+            name: input.human_name(),
             contents: input.contents.clone(),
             hash: input.hash.clone(),
         };

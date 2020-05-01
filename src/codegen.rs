@@ -57,7 +57,7 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
         // If we can't construct a relative path, there isn't a sensible name
         // that we can use to refer to this input.
         let relative_path = input
-            .path
+            .path_without_dpi_scale
             .strip_prefix(&input.config.base_path)
             .expect("Input base path was not a base path for input");
 
@@ -68,7 +68,9 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
             match component {
                 path::Component::Prefix(_)
                 | path::Component::RootDir
-                | path::Component::Normal(_) => segments.push(Path::new(component.as_os_str())),
+                | path::Component::Normal(_) => {
+                    segments.push(component.as_os_str().to_str().unwrap())
+                }
                 path::Component::CurDir => {}
                 path::Component::ParentDir => assert!(segments.pop().is_some()),
             }
@@ -77,20 +79,18 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
         // Navigate down the tree, creating any folder entries that don't exist
         // yet.
         let mut current_dir = &mut root_folder;
-        for (i, segment) in segments.iter().enumerate() {
+        for (i, &segment) in segments.iter().enumerate() {
             if i == segments.len() - 1 {
                 // We assume that the last segment of a path must be a file.
 
-                let name = &input.stem_name;
-
-                let input_group = match current_dir.get_mut(name) {
+                let input_group = match current_dir.get_mut(segment) {
                     Some(existing) => existing,
                     None => {
                         let input_group = GroupedItem::InputGroup {
                             inputs_by_dpi_scale: BTreeMap::new(),
                         };
-                        current_dir.insert(name.to_owned(), input_group);
-                        current_dir.get_mut(name).unwrap()
+                        current_dir.insert(segment.to_owned(), input_group);
+                        current_dir.get_mut(segment).unwrap()
                     }
                 };
 
@@ -103,12 +103,12 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
                     unreachable!();
                 }
             } else {
-                let name = segment.to_str().unwrap().to_owned();
-                let next_entry = current_dir
-                    .entry(name)
-                    .or_insert_with(|| GroupedItem::Folder {
-                        children_by_name: BTreeMap::new(),
-                    });
+                let next_entry =
+                    current_dir
+                        .entry(segment.to_owned())
+                        .or_insert_with(|| GroupedItem::Folder {
+                            children_by_name: BTreeMap::new(),
+                        });
 
                 if let GroupedItem::Folder { children_by_name } = next_entry {
                     current_dir = children_by_name;
