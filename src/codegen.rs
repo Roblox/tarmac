@@ -3,7 +3,7 @@
 //! Tarmac uses a small Lua AST to build up generated code.
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     io::{self, Write},
     path::{self, Path},
 };
@@ -13,7 +13,7 @@ use fs_err::File;
 use crate::{
     data::ImageSlice,
     data::SyncInput,
-    lua_ast::{Expression, Statement, Table},
+    lua_ast::{Block, Expression, Function, IfBlock, Statement, Table},
 };
 
 const CODEGEN_HEADER: &str =
@@ -34,7 +34,7 @@ enum GroupedItem<'a> {
         children_by_name: BTreeMap<String, GroupedItem<'a>>,
     },
     InputGroup {
-        inputs_by_dpi_scale: HashMap<u32, &'a SyncInput>,
+        inputs_by_dpi_scale: BTreeMap<u32, &'a SyncInput>,
     },
 }
 
@@ -87,7 +87,7 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
                     Some(existing) => existing,
                     None => {
                         let input_group = GroupedItem::InputGroup {
-                            inputs_by_dpi_scale: HashMap::new(),
+                            inputs_by_dpi_scale: BTreeMap::new(),
                         };
                         current_dir.insert(name.to_owned(), input_group);
                         current_dir.get_mut(name).unwrap()
@@ -141,13 +141,9 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
 
                     if let Some(id) = input.id {
                         if let Some(slice) = input.slice {
-                            let template = UrlAndSliceTemplate { id, slice };
-
-                            Some(template.to_lua())
+                            Some(codegen_url_and_slice(id, slice))
                         } else {
-                            let template = AssetUrlTemplate { id };
-
-                            Some(template.to_lua())
+                            Some(codegen_just_asset_url(id))
                         }
                     } else {
                         None
@@ -156,8 +152,7 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
                     // In this case, we have the same asset in multiple
                     // different DPI scales. We can generate code to pick
                     // between them at runtime.
-
-                    unimplemented!()
+                    Some(codegen_with_high_dpi_options(inputs_by_dpi_scale))
                 }
             }
         }
@@ -183,13 +178,9 @@ fn codegen_individual(inputs: &[&SyncInput]) -> io::Result<()> {
         let maybe_expression = if input.config.codegen {
             if let Some(id) = input.id {
                 if let Some(slice) = input.slice {
-                    let template = UrlAndSliceTemplate { id, slice };
-
-                    Some(template.to_lua())
+                    Some(codegen_url_and_slice(id, slice))
                 } else {
-                    let template = AssetUrlTemplate { id };
-
-                    Some(template.to_lua())
+                    Some(codegen_just_asset_url(id))
                 }
             } else {
                 None
@@ -212,39 +203,67 @@ fn codegen_individual(inputs: &[&SyncInput]) -> io::Result<()> {
     Ok(())
 }
 
-/// Codegen template for CodegenKind::AssetUrl
-pub(crate) struct AssetUrlTemplate {
-    pub id: u64,
+fn codegen_url_and_slice(id: u64, slice: ImageSlice) -> Expression {
+    let offset = slice.min();
+    let size = slice.size();
+
+    let mut table = Table::new();
+    table.add_entry("Image", format!("rbxassetid://{}", id));
+    table.add_entry(
+        "ImageRectOffset",
+        Expression::Raw(format!("Vector2.new({}, {})", offset.0, offset.1)),
+    );
+
+    table.add_entry(
+        "ImageRectSize",
+        Expression::Raw(format!("Vector2.new({}, {})", size.0, size.1)),
+    );
+
+    Expression::Table(table)
 }
 
-impl AssetUrlTemplate {
-    fn to_lua(&self) -> Expression {
-        Expression::String(format!("rbxassetid://{}", self.id))
+fn codegen_just_asset_url(id: u64) -> Expression {
+    Expression::String(format!("rbxassetid://{}", id))
+}
+
+fn codegen_dpi_option(input: &SyncInput) -> (Expression, Block) {
+    let condition = Expression::Raw(format!("dpiScale >= {}", input.dpi_scale));
+
+    // FIXME: We should probably pull data out of SyncInput at the start of
+    // codegen so that we can handle invariants like this.
+    let id = input.id.unwrap();
+
+    let value = match input.slice {
+        Some(slice) => codegen_url_and_slice(id, slice),
+        None => codegen_just_asset_url(id),
+    };
+
+    let body = Statement::Return(value);
+
+    (condition, body.into())
+}
+
+fn codegen_with_high_dpi_options(inputs: &BTreeMap<u32, &SyncInput>) -> Expression {
+    let args = "dpiScale".to_owned();
+
+    let mut options_high_to_low = inputs.values().rev().peekable();
+
+    let highest_dpi_option = options_high_to_low.next().unwrap();
+    let (highest_cond, highest_body) = codegen_dpi_option(highest_dpi_option);
+
+    let mut if_block = IfBlock::new(highest_cond, highest_body);
+
+    while let Some(dpi_option) = options_high_to_low.next() {
+        let (cond, body) = codegen_dpi_option(dpi_option);
+
+        if options_high_to_low.peek().is_some() {
+            if_block.else_if_blocks.push((cond, body));
+        } else {
+            if_block.else_block = Some(body);
+        }
     }
-}
 
-pub(crate) struct UrlAndSliceTemplate {
-    pub id: u64,
-    pub slice: ImageSlice,
-}
+    let statements = vec![Statement::If(if_block)];
 
-impl UrlAndSliceTemplate {
-    fn to_lua(&self) -> Expression {
-        let offset = self.slice.min();
-        let size = self.slice.size();
-
-        let mut table = Table::new();
-        table.add_entry("Image", format!("rbxassetid://{}", self.id));
-        table.add_entry(
-            "ImageRectOffset",
-            Expression::Raw(format!("Vector2.new({}, {})", offset.0, offset.1)),
-        );
-
-        table.add_entry(
-            "ImageRectSize",
-            Expression::Raw(format!("Vector2.new({}, {})", size.0, size.1)),
-        );
-
-        Expression::Table(table)
-    }
+    Expression::Function(Function::new(args, statements))
 }
