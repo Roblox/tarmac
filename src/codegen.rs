@@ -139,14 +139,10 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
 
                     let input = inputs_by_dpi_scale.values().next().unwrap();
 
-                    if let Some(id) = input.id {
-                        if let Some(slice) = input.slice {
-                            Some(codegen_url_and_slice(id, slice))
-                        } else {
-                            Some(codegen_just_asset_url(id))
-                        }
-                    } else {
-                        None
+                    match (input.id, input.slice) {
+                        (Some(id), Some(slice)) => Some(codegen_url_and_slice(id, slice)),
+                        (Some(id), None) => Some(codegen_just_asset_url(id)),
+                        _ => None,
                     }
                 } else {
                     // In this case, we have the same asset in multiple
@@ -175,29 +171,19 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
 /// defined, and so generate individual files.
 fn codegen_individual(inputs: &[&SyncInput]) -> io::Result<()> {
     for input in inputs {
-        let maybe_expression = if input.config.codegen {
-            if let Some(id) = input.id {
-                if let Some(slice) = input.slice {
-                    Some(codegen_url_and_slice(id, slice))
-                } else {
-                    Some(codegen_just_asset_url(id))
-                }
-            } else {
-                None
-            }
-        } else {
-            None
+        let expression = match (input.id, input.slice) {
+            (Some(id), Some(slice)) => codegen_url_and_slice(id, slice),
+            (Some(id), None) => codegen_just_asset_url(id),
+            _ => continue,
         };
 
-        if let Some(expression) = maybe_expression {
-            let ast = Statement::Return(expression);
+        let ast = Statement::Return(expression);
 
-            let path = input.path.with_extension("lua");
+        let path = input.path.with_extension("lua");
 
-            let mut file = File::create(path)?;
-            writeln!(file, "{}", CODEGEN_HEADER)?;
-            write!(file, "{}", ast)?;
-        }
+        let mut file = File::create(path)?;
+        writeln!(file, "{}", CODEGEN_HEADER)?;
+        write!(file, "{}", ast)?;
     }
 
     Ok(())
