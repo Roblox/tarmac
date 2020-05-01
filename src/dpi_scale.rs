@@ -64,17 +64,17 @@ mod test {
     fn no_attached_scale() {
         assert_eq!(
             extract_path_info("foo.png"),
-            Some(DpiAwarePathInfo::new("foo", 1))
+            DpiAwarePathInfo::new("foo", 1)
         );
 
         assert_eq!(
             extract_path_info("foo.blah.png"),
-            Some(DpiAwarePathInfo::new("foo.blah", 1))
+            DpiAwarePathInfo::new("foo.blah", 1)
         );
 
         assert_eq!(
             extract_path_info("foo/bar/baz/hello.png"),
-            Some(DpiAwarePathInfo::new("hello", 1))
+            DpiAwarePathInfo::new("hello", 1)
         );
     }
 
@@ -82,22 +82,22 @@ mod test {
     fn explicit_1x() {
         assert_eq!(
             extract_path_info("layerify@1x.png"),
-            Some(DpiAwarePathInfo::new("layerify", 1))
+            DpiAwarePathInfo::new("layerify", 1)
         );
 
         assert_eq!(
             extract_path_info("layerify.blah@1x.png"),
-            Some(DpiAwarePathInfo::new("layerify.blah", 1))
+            DpiAwarePathInfo::new("layerify.blah", 1)
         );
 
         assert_eq!(
             extract_path_info("layerify@1x.png.bak"),
-            Some(DpiAwarePathInfo::new("layerify@1x.png", 1)),
+            DpiAwarePathInfo::new("layerify@1x.png", 1)
         );
 
         assert_eq!(
             extract_path_info("some/path/to/image/nice@1x.png"),
-            Some(DpiAwarePathInfo::new("nice", 1))
+            DpiAwarePathInfo::new("nice", 1)
         );
     }
 
@@ -105,22 +105,22 @@ mod test {
     fn explicit_not_1x() {
         assert_eq!(
             extract_path_info("cool-company@2x.png"),
-            Some(DpiAwarePathInfo::new("cool-company", 2))
+            DpiAwarePathInfo::new("cool-company", 2)
         );
 
         assert_eq!(
             extract_path_info("engineers@10x.png"),
-            Some(DpiAwarePathInfo::new("engineers", 10))
+            DpiAwarePathInfo::new("engineers", 10)
         );
 
         assert_eq!(
             extract_path_info("we.like.dots@3x.png"),
-            Some(DpiAwarePathInfo::new("we.like.dots", 3))
+            DpiAwarePathInfo::new("we.like.dots", 3)
         );
 
         assert_eq!(
             extract_path_info("backup-your-stuff@4x.png.bak"),
-            Some(DpiAwarePathInfo::new("backup-your-stuff@4x.png", 1))
+            DpiAwarePathInfo::new("backup-your-stuff@4x.png", 1)
         );
     }
 }
