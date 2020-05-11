@@ -54,10 +54,14 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
             continue;
         }
 
+        // The extension portion of the path is not useful for code generation.
+        // By stripping it off, we generate the names that users expect.
+        let mut path_without_extension = input.path_without_dpi_scale.clone();
+        path_without_extension.set_extension("");
+
         // If we can't construct a relative path, there isn't a sensible name
         // that we can use to refer to this input.
-        let relative_path = input
-            .path_without_dpi_scale
+        let relative_path = path_without_extension
             .strip_prefix(&input.config.base_path)
             .expect("Input base path was not a base path for input");
 
