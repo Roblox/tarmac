@@ -1,0 +1,7 @@
+name = "03-high-dpi"
+
+[[inputs]]
+glob = "assets/**/*.png"
+codegen = true
+base-path = "assets"
+codegen-path = "src/assets.lua"

@@ -15,7 +15,7 @@ use crate::{
     auth_cookie::get_auth_cookie,
     codegen::perform_codegen,
     data::{Config, ConfigError, ImageSlice, InputManifest, Manifest, ManifestError, SyncInput},
-    dpi_scale::dpi_scale_for_path,
+    dpi_scale,
     image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{RobloxApiClient, RobloxApiError},
@@ -241,6 +241,8 @@ impl SyncSession {
                     let name = AssetName::from_paths(config_path, &path);
                     log::trace!("Found input {}", name);
 
+                    let path_info = dpi_scale::extract_path_info(&path);
+
                     let contents = fs::read(&path)?;
                     let hash = generate_asset_hash(&contents);
 
@@ -256,6 +258,8 @@ impl SyncSession {
                         SyncInput {
                             name,
                             path,
+                            path_without_dpi_scale: path_info.path_without_dpi_scale,
+                            dpi_scale: path_info.dpi_scale,
                             config: input_config.clone(),
                             contents,
                             hash,
@@ -291,7 +295,7 @@ impl SyncSession {
 
             let kind = InputKind {
                 packable: input.config.packable,
-                dpi_scale: dpi_scale_for_path(&input.path),
+                dpi_scale: input.dpi_scale,
             };
 
             let input_group = compatible_input_groups.entry(kind).or_insert_with(Vec::new);
@@ -422,7 +426,7 @@ impl SyncSession {
         let hash = generate_asset_hash(&encoded_image);
 
         let upload_data = UploadInfo {
-            name: AssetName::spritesheet(),
+            name: "spritesheet".to_owned(),
             contents: encoded_image,
             hash: hash.clone(),
         };
@@ -448,7 +452,7 @@ impl SyncSession {
         let input = self.inputs.get_mut(input_name).unwrap();
 
         let upload_data = UploadInfo {
-            name: input_name.clone(),
+            name: input.human_name(),
             contents: input.contents.clone(),
             hash: input.hash.clone(),
         };

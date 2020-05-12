@@ -72,7 +72,10 @@ impl RobloxApiClient {
         let body = response.text().unwrap();
 
         if response.status().is_success() {
-            Ok(serde_json::from_str(&body)?)
+            match serde_json::from_str(&body) {
+                Ok(response) => Ok(response),
+                Err(source) => Err(RobloxApiError::BadResponseJson { body, source }),
+            }
         } else {
             Err(RobloxApiError::ResponseError {
                 status: response.status(),
@@ -133,9 +136,9 @@ pub enum RobloxApiError {
         source: reqwest::Error,
     },
 
-    #[error("Roblox API returned success, but had malformed JSON response")]
+    #[error("Roblox API returned success, but had malformed JSON response: {body}")]
     BadResponseJson {
-        #[from]
+        body: String,
         source: serde_json::Error,
     },
 

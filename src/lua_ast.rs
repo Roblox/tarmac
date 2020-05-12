@@ -41,6 +41,14 @@ pub(crate) struct Block {
     pub statements: Vec<Statement>,
 }
 
+impl From<Statement> for Block {
+    fn from(statement: Statement) -> Self {
+        Self {
+            statements: vec![statement],
+        }
+    }
+}
+
 impl FmtLua for Block {
     fn fmt_lua(&self, output: &mut LuaStream<'_>) -> fmt::Result {
         for statement in &self.statements {
@@ -90,7 +98,7 @@ impl FmtLua for Statement {
                     output.unindent();
                 }
 
-                writeln!(output, "end")
+                write!(output, "end")
             }
         }
     }
@@ -99,10 +107,21 @@ impl FmtLua for Statement {
 proxy_display!(Statement);
 
 pub(crate) struct IfBlock {
-    condition: Expression,
-    body: Block,
-    else_if_blocks: Vec<(Expression, Block)>,
-    else_block: Option<Block>,
+    pub condition: Expression,
+    pub body: Block,
+    pub else_if_blocks: Vec<(Expression, Block)>,
+    pub else_block: Option<Block>,
+}
+
+impl IfBlock {
+    pub fn new<E: Into<Expression>, B: Into<Block>>(condition: E, body: B) -> Self {
+        Self {
+            condition: condition.into(),
+            body: body.into(),
+            else_if_blocks: Vec::new(),
+            else_block: None,
+        }
+    }
 }
 
 pub(crate) enum Expression {
@@ -239,6 +258,12 @@ fn is_valid_ident(value: &str) -> bool {
 pub(crate) struct Function {
     pub args: String,
     pub body: Vec<Statement>,
+}
+
+impl Function {
+    pub fn new(args: String, body: Vec<Statement>) -> Self {
+        Self { args, body }
+    }
 }
 
 impl FmtLua for Function {
