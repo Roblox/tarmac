@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     env, io,
     path::{Path, PathBuf},
 };
@@ -573,6 +573,41 @@ impl SyncSession {
         log::debug!("Populating asset cache");
 
         fs_err::create_dir_all(&cache_path)?;
+
+        let known_ids: HashSet<u64> = self.inputs.values().filter_map(|input| input.id).collect();
+
+        // Clean up cache items that aren't present in our current project.
+        for entry in fs_err::read_dir(&cache_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            let metadata = fs_err::metadata(&path)?;
+
+            let name_as_id: Option<u64> = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|name| name.parse().ok());
+
+            let should_clean_up;
+            if metadata.is_dir() {
+                // Tarmac never generates directories, so we should clean this.
+                should_clean_up = true;
+            } else if let Some(id) = name_as_id {
+                // This file looks like an ID. If it's not present in this
+                // project, we assume it's from an old sync and clean it up.
+                should_clean_up = !known_ids.contains(&id);
+            } else {
+                // This is some other file that we should clean up.
+                should_clean_up = true;
+            }
+
+            if should_clean_up {
+                if metadata.is_dir() {
+                    fs_err::remove_dir_all(&path)?;
+                } else {
+                    fs_err::remove_file(&path)?;
+                }
+            }
+        }
 
         for input in self.inputs.values() {
             if let Some(id) = input.id {
