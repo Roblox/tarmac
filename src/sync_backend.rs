@@ -21,11 +21,15 @@ pub struct UploadInfo {
 
 pub struct RobloxSyncBackend<'a> {
     api_client: &'a mut RobloxApiClient,
+    upload_to_group_id: Option<u64>,
 }
 
 impl<'a> RobloxSyncBackend<'a> {
-    pub fn new(api_client: &'a mut RobloxApiClient) -> Self {
-        Self { api_client }
+    pub fn new(api_client: &'a mut RobloxApiClient, upload_to_group_id: Option<u64>) -> Self {
+        Self {
+            api_client,
+            upload_to_group_id,
+        }
     }
 }
 
@@ -37,6 +41,7 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
             image_data: Cow::Owned(data.contents),
             name: &data.name,
             description: "Uploaded by Tarmac.",
+            group_id: self.upload_to_group_id,
         })?;
 
         log::info!(

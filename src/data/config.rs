@@ -30,6 +30,11 @@ pub struct Config {
     /// stored. Each asset's name will match its asset ID.
     pub asset_cache_path: Option<PathBuf>,
 
+    /// If specified, requires that all uploaded assets are uploaded to the
+    /// given group. Attempting to sync will fail if the authenticated user does
+    /// not have access to create assets on the group.
+    pub upload_to_group_id: Option<u64>,
+
     /// A list of other Tarmac config files that should be owned by this one.
     #[serde(default)]
     pub includes: Vec<IncludeConfig>,

@@ -23,6 +23,7 @@ pub fn upload_image(global: GlobalOptions, options: UploadImageOptions) {
         image_data: Cow::Owned(image_data),
         name: &options.name,
         description: &options.description,
+        group_id: None,
     };
 
     let response = client
