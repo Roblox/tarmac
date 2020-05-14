@@ -1,5 +1,9 @@
 name = "02-spritesheets"
 
+# Tarmac is able to generate a list of all assets used by the project for
+# consumption by other tools.
+asset-list-path = "assets.lua"
+
 [[inputs]]
 glob = "pack-these/**/*.png"
 base-path = "pack-these"

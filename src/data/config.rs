@@ -30,6 +30,10 @@ pub struct Config {
     /// stored. Each asset's name will match its asset ID.
     pub asset_cache_path: Option<PathBuf>,
 
+    /// A path to a file where Tarmac will write a list of all of the asset URLs
+    /// referred to by this project.
+    pub asset_list_path: Option<PathBuf>,
+
     /// If specified, requires that all uploaded assets are uploaded to the
     /// given group. Attempting to sync will fail if the authenticated user does
     /// not have access to create assets on the group.
@@ -90,6 +94,10 @@ impl Config {
     /// Turn all relative paths referenced from this config into absolute paths.
     fn make_paths_absolute(&mut self) {
         let base = self.file_path.parent().unwrap();
+
+        if let Some(list_path) = self.asset_list_path.as_mut() {
+            make_absolute(list_path, base);
+        }
 
         if let Some(cache_path) = self.asset_cache_path.as_mut() {
             make_absolute(cache_path, base);

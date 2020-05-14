@@ -1,6 +1,7 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    env, io,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    env,
+    io::{self, BufWriter, Write},
     path::{Path, PathBuf},
 };
 
@@ -58,6 +59,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
 
     session.write_manifest()?;
     session.codegen()?;
+    session.write_asset_list()?;
     session.populate_asset_cache(&mut api_client)?;
 
     if session.sync_errors.is_empty() {
@@ -566,6 +568,29 @@ impl SyncSession {
             perform_codegen(output_path, &inputs)?;
         }
 
+        Ok(())
+    }
+
+    fn write_asset_list(&self) -> Result<(), SyncError> {
+        let list_path = match &self.root_config().asset_list_path {
+            Some(path) => path,
+            None => return Ok(()),
+        };
+
+        log::debug!("Writing asset list");
+
+        let list_parent = list_path.parent().unwrap();
+        fs_err::create_dir_all(list_parent)?;
+
+        let mut file = BufWriter::new(fs_err::File::create(list_path)?);
+
+        let known_ids: BTreeSet<u64> = self.inputs.values().filter_map(|input| input.id).collect();
+
+        for id in known_ids {
+            writeln!(file, "rbxassetid://{}", id)?;
+        }
+
+        file.flush()?;
         Ok(())
     }
 
