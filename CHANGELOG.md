@@ -4,6 +4,8 @@
 * **Breaking**: Codegen is no longer configurable. The correct codegen style is now chosen based on the kind of input. ([#28](https://github.com/rojo-rbx/tarmac/pull/28))
 * Removed (unimplemented) `content-folder` target and added `none` target.
 	* This target always fails to upload, and is useful to verify that all assets have been uploaded as part of a CI job.
+* Added `asset-cache-path` config option. If specified, Tarmac will download managed assets from Roblox.com to populate the given directory with.
+* Added `upload-to-group-id` config option to require that all uploaded assets are uploaded to the given group.
 
 ## 0.4.0 (2020-03-04)
 * Tarmac now "alpha-bleeds" packed image spritesheets to prevent artifacts from appearing when resized in Roblox.

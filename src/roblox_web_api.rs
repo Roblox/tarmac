@@ -1,4 +1,7 @@
-use std::{borrow::Cow, fmt};
+use std::{
+    borrow::Cow,
+    fmt::{self, Write},
+};
 
 use reqwest::{
     header::{HeaderValue, COOKIE},
@@ -12,6 +15,7 @@ pub struct ImageUploadData<'a> {
     pub image_data: Cow<'a, [u8]>,
     pub name: &'a str,
     pub description: &'a str,
+    pub group_id: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,7 +34,7 @@ pub struct RobloxApiClient {
 
 impl fmt::Debug for RobloxApiClient {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "RobloxApiClient>")
+        write!(formatter, "RobloxApiClient")
     }
 }
 
@@ -59,11 +63,15 @@ impl RobloxApiClient {
         &mut self,
         data: ImageUploadData,
     ) -> Result<UploadResponse, RobloxApiError> {
-        let url = "https://data.roblox.com/data/upload/json?assetTypeId=13";
+        let mut url = "https://data.roblox.com/data/upload/json?assetTypeId=13".to_owned();
+
+        if let Some(group_id) = data.group_id {
+            write!(url, "&groupId={}", group_id).unwrap();
+        }
 
         let mut response = self.execute_with_csrf_retry(|client| {
             Ok(client
-                .post(url)
+                .post(&url)
                 .query(&[("name", data.name), ("description", data.description)])
                 .body(data.image_data.clone().into_owned())
                 .build()?)

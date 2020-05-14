@@ -40,7 +40,8 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
 
     match options.target {
         SyncTarget::Roblox => {
-            let mut backend = RobloxSyncBackend::new(&mut api_client);
+            let mut backend =
+                RobloxSyncBackend::new(&mut api_client, session.root_config().upload_to_group_id);
 
             session.sync_with_backend(&mut backend);
         }

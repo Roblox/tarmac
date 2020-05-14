@@ -1,0 +1,5 @@
+name = "04-group-assets"
+upload-to-group-id = 4653149
+
+[[inputs]]
+glob = "assets/**/*.png"
