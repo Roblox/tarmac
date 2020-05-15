@@ -1,6 +1,7 @@
 use std::{borrow::Cow, io, path::Path};
 
 use fs_err as fs;
+use reqwest::StatusCode;
 use thiserror::Error;
 
 use crate::roblox_web_api::{ImageUploadData, RobloxApiClient, RobloxApiError};
@@ -37,22 +38,33 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
     fn upload(&mut self, data: UploadInfo) -> Result<UploadResponse, Error> {
         log::info!("Uploading {} to Roblox", &data.name);
 
-        let response = self.api_client.upload_image(ImageUploadData {
+        let result = self.api_client.upload_image(ImageUploadData {
             image_data: Cow::Owned(data.contents),
             name: &data.name,
             description: "Uploaded by Tarmac.",
             group_id: self.upload_to_group_id,
-        })?;
+        });
 
-        log::info!(
-            "Uploaded {} to ID {}",
-            &data.name,
-            response.backing_asset_id
-        );
+        match result {
+            Ok(response) => {
+                log::info!(
+                    "Uploaded {} to ID {}",
+                    &data.name,
+                    response.backing_asset_id
+                );
 
-        Ok(UploadResponse {
-            id: response.backing_asset_id,
-        })
+                Ok(UploadResponse {
+                    id: response.backing_asset_id,
+                })
+            }
+
+            Err(RobloxApiError::ResponseError {
+                status: StatusCode::TOO_MANY_REQUESTS,
+                ..
+            }) => Err(Error::RateLimited),
+
+            Err(err) => Err(err.into()),
+        }
     }
 }
 
@@ -95,6 +107,9 @@ impl SyncBackend for DebugSyncBackend {
 pub enum Error {
     #[error("Cannot upload assets with the 'none' target.")]
     NoneBackend,
+
+    #[error("Tarmac was rate-limited trying to upload assets. Try again in a little bit.")]
+    RateLimited,
 
     #[error(transparent)]
     Io {
