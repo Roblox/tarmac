@@ -306,15 +306,29 @@ impl SyncSession {
             input_group.push(input_name.clone());
         }
 
-        for (kind, group) in compatible_input_groups {
+        'outer: for (kind, group) in compatible_input_groups {
             if kind.packable {
                 if let Err(err) = self.sync_packable_images(backend, group) {
+                    let rate_limited = err.is_rate_limited();
+
+                    println!("{}: {:#?}", rate_limited, err);
+
                     self.raise_error(err);
+
+                    if rate_limited {
+                        break 'outer;
+                    }
                 }
             } else {
                 for input_name in group {
                     if let Err(err) = self.sync_unpackable_image(backend, &input_name) {
+                        let rate_limited = err.is_rate_limited();
+
                         self.raise_error(err);
+
+                        if rate_limited {
+                            break 'outer;
+                        }
                     }
                 }
             }
@@ -734,4 +748,15 @@ pub enum SyncError {
         #[from]
         source: RobloxApiError,
     },
+}
+
+impl SyncError {
+    pub fn is_rate_limited(&self) -> bool {
+        match self {
+            Self::Backend {
+                source: SyncBackendError::RateLimited,
+            } => true,
+            _ => false,
+        }
+    }
 }
