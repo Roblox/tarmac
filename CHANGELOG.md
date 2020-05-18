@@ -8,6 +8,8 @@
 * Added `upload-to-group-id` config option to require that all uploaded assets are uploaded to the given group.
 * Added `asset-list-path` for generating a list of all asset URLs referred to by the Tarmac project.
 	* This output format is intended for consumption by other tools.
+* Fixed handling of HTTP 429 (Too Many Requests) responses from the Roblox asset endpoints.
+	* Tarmac will now save its progress and exit with an error in this case.
 
 ## 0.4.0 (2020-03-04)
 * Tarmac now "alpha-bleeds" packed image spritesheets to prevent artifacts from appearing when resized in Roblox.
