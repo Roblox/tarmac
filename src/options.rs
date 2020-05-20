@@ -3,7 +3,7 @@ use std::{path::PathBuf, str::FromStr};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-#[structopt(about = "A tool to help manage Roblox assets from the command line")]
+#[structopt(about = env!("CARGO_PKG_DESCRIPTION"))]
 pub struct Options {
     #[structopt(flatten)]
     pub global: GlobalOptions,
@@ -27,12 +27,11 @@ pub struct GlobalOptions {
 
 #[derive(Debug, StructOpt)]
 pub enum Subcommand {
-    /// Upload a single image to Roblox.com. Prints the asset ID of the
+    /// Upload a single image to the Roblox cloud. Prints the asset ID of the
     /// resulting Image asset to stdout.
     UploadImage(UploadImageOptions),
 
-    /// Sync your Tarmac asset project up to Roblox.com, uploading any assets
-    /// that have changed.
+    /// Sync your Tarmac project, uploading any assets that have changed.
     Sync(SyncOptions),
 }
 
@@ -52,19 +51,20 @@ pub struct UploadImageOptions {
 
 #[derive(Debug, StructOpt)]
 pub struct SyncOptions {
-    /// Where Tarmac should put resulting artifacts. This impacts code
-    /// generation and what side effects Tarmac performs.
+    /// Where Tarmac should sync the project.
     ///
     /// Options:
     ///
     /// - roblox: Upload to Roblox.com
-    /// - content-folder: Copy to content folder with hashed names
+    ///
+    /// - none: Do not upload. Tarmac will exit with an error if there are any
+    ///   unsynced assets.
+    ///
     /// - debug: Copy to local debug directory for debugging output
     #[structopt(long)]
     pub target: SyncTarget,
 
-    /// The path to a Tarmac config, or a folder containing a Tarmac config, to
-    /// define how to turn files on disk into assets.
+    /// The path to a Tarmac config, or a folder containing a Tarmac project.
     pub config_path: Option<PathBuf>,
 }
 
