@@ -49,7 +49,7 @@ cargo install --git https://github.com/rojo-rbx/tarmac
 ## Basic Example
 **The [examples](examples) folder contains small, working projects using different features from Tarmac.**
 
-Tarmac is configured by a [TOML](https://github.com/toml-lang/toml) file in the root of a project named `tarmac.toml`. This is where you can configure where Tarmac will look for assets and what it will do with them.
+Tarmac is configured by a [TOML](https://github.com/toml-lang/toml) file in the root of a project named `tarmac.toml`. Tarmac uses this file to determine where to look for assets and what to do with them.
 
 To tell Tarmac to manage PNG files in a folder named `assets`, you can use:
 
