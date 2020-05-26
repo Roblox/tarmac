@@ -1,0 +1,7 @@
+name = "05-roact"
+
+[[inputs]]
+glob = "assets/**/*.png"
+codegen = true
+base-path = "assets"
+codegen-path = "src/Assets.lua"
