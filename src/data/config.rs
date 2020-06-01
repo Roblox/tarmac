@@ -43,7 +43,8 @@ pub struct Config {
     #[serde(default)]
     pub includes: Vec<IncludeConfig>,
 
-    /// A list of inputs
+    /// A list of input glob paths and options that Tarmac should use to
+    /// discover assets that it should manage.
     #[serde(default)]
     pub inputs: Vec<InputConfig>,
 
