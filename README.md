@@ -159,8 +159,9 @@ tarmac help [<subcommand>]
 	* If defined, Tarmac will attempt to upload all assets to the given Roblox Group. If unable, syncing will fail.
 * `inputs`, list\<InputConfig\>, **optional**
 	* A list of inputs that Tarmac will process.
-* `includes`, list\<IncludeConfig\>, **optional**
-	* A list of additional paths to search for additional projects in. The inputs from discovered projects will be merged into this project, and other settings ignored.
+* `includes`, list\<path\>, **optional**
+	* A list of additional paths to search recursively for additional projects in. The inputs from discovered projects will be merged into this project, and other settings ignored.
+	* When a `tarmac.toml` file is found, Tarmac will include it and its includes and stop traversing that directory.
 
 ### InputConfig
 * `glob`, string
@@ -172,10 +173,6 @@ tarmac help [<subcommand>]
 	* If defined and `codegen` is true, Tarmac will merge all generated Lua code for this input group into a single file.
 * `base-path`, path, **optional**
 	* Defines the base path for generating Lua code when `codegen-path` is also defined. Defaults to **the directory containing `tarmac.toml`**.
-
-### IncludeConfig
-* `path`, path
-	* A path to search in recursively for additional Tarmac projects. When a `tarmac.toml` file is found, Tarmac will include it and its includes and stop traversing that directory.
 
 ## License
 Tarmac is available under the MIT license. See [LICENSE.txt](LICENSE.txt) for details.

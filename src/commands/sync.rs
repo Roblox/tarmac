@@ -146,12 +146,7 @@ impl SyncSession {
     /// part of the sync.
     fn discover_configs(&mut self) -> Result<(), SyncError> {
         let mut to_search = VecDeque::new();
-        to_search.extend(
-            self.root_config()
-                .includes
-                .iter()
-                .map(|include| include.path.clone()),
-        );
+        to_search.extend(self.root_config().includes.iter().cloned());
 
         while let Some(search_path) = to_search.pop_front() {
             let search_meta = fs::metadata(&search_path)?;
@@ -163,7 +158,7 @@ impl SyncSession {
                 let config = Config::read_from_file(&search_path)?;
 
                 // Include any configs that this config references.
-                to_search.extend(config.includes.iter().map(|include| include.path.clone()));
+                to_search.extend(config.includes.iter().cloned());
 
                 self.configs.push(config);
             } else {
@@ -175,8 +170,7 @@ impl SyncSession {
                         // We found a config, we're done here.
 
                         // Append config include paths from this config
-                        to_search
-                            .extend(config.includes.iter().map(|include| include.path.clone()));
+                        to_search.extend(config.includes.iter().cloned());
 
                         self.configs.push(config);
                     }

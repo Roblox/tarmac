@@ -39,9 +39,12 @@ pub struct Config {
     /// not have access to create assets on the group.
     pub upload_to_group_id: Option<u64>,
 
-    /// A list of other Tarmac config files that should be owned by this one.
+    /// A list of paths that Tarmac should search in to find other Tarmac
+    /// projects.
+    ///
+    /// Any found projects will have their inputs merged into this project.
     #[serde(default)]
-    pub includes: Vec<IncludeConfig>,
+    pub includes: Vec<PathBuf>,
 
     /// A list of input glob paths and options that Tarmac should use to
     /// discover assets that it should manage.
@@ -105,7 +108,7 @@ impl Config {
         }
 
         for include in &mut self.includes {
-            make_absolute(&mut include.path, base);
+            make_absolute(include, base);
         }
 
         for input in &mut self.inputs {
@@ -120,13 +123,6 @@ impl Config {
 
 fn default_max_spritesheet_size() -> (u32, u32) {
     (1024, 1024)
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct IncludeConfig {
-    /// The path to search for other projects in, recursively.
-    pub path: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
