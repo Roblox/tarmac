@@ -60,9 +60,9 @@ name = "basic-tarmac-example"
 # This tells Tarmac where to find assets that we'll use in our game.
 [[inputs]]
 glob = "assets/**/*.png"
-base-path = "assets"
 codegen = true
 codegen-path = "src/assets.lua"
+codegen-base-path = "assets"
 ```
 
 Run `tarmac sync --target roblox` to have Tarmac upload any new or updated assets that your project depends on. You may need to pass a `.ROBLOSECURITY` cookie explicitly via the `--auth` argument.
