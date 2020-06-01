@@ -6,7 +6,6 @@ asset-list-path = "assets.lua"
 
 [[inputs]]
 glob = "pack-these/**/*.png"
-base-path = "pack-these"
 
 # Set packable to true to tell Tarmac that we're okay with these images being
 # packed into spritesheets.
@@ -14,6 +13,7 @@ packable = true
 
 codegen = true
 codegen-path = "pack-these/init.lua"
+codegen-base-path = "pack-these"
 
 [[inputs]]
 glob = "dont-pack-these/**/*.png"

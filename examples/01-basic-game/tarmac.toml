@@ -14,3 +14,4 @@ glob = "assets/**/*.png"
 # Tells Tarmac to generate links to our assets in src/assets.lua.
 codegen = true
 codegen-path = "src/assets.lua"
+codegen-base-path = "assets"

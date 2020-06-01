@@ -116,7 +116,7 @@ impl Config {
                 make_absolute(codegen_path, base);
             }
 
-            make_absolute(&mut input.base_path, base);
+            make_absolute(&mut input.codegen_base_path, base);
         }
     }
 }
@@ -143,7 +143,7 @@ pub struct InputConfig {
     pub codegen_path: Option<PathBuf>,
 
     #[serde(default)]
-    pub base_path: PathBuf,
+    pub codegen_base_path: PathBuf,
 
     /// Whether the assets affected by this config are allowed to be packed into
     /// spritesheets.

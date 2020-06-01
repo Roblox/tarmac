@@ -62,7 +62,7 @@ fn codegen_grouped(output_path: &Path, inputs: &[&SyncInput]) -> io::Result<()> 
         // If we can't construct a relative path, there isn't a sensible name
         // that we can use to refer to this input.
         let relative_path = path_without_extension
-            .strip_prefix(&input.config.base_path)
+            .strip_prefix(&input.config.codegen_base_path)
             .expect("Input base path was not a base path for input");
 
         // Collapse `..` path segments so that we can map this path onto our

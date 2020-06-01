@@ -171,7 +171,7 @@ tarmac help [<subcommand>]
 	* Whether Tarmac should generate Lua code for the assets contained in this input group. Defaults to **false**.
 * `codegen-path`, path, **optional**
 	* If defined and `codegen` is true, Tarmac will merge all generated Lua code for this input group into a single file.
-* `base-path`, path, **optional**
+* `codegen-base-path`, path, **optional**
 	* Defines the base path for generating Lua code when `codegen-path` is also defined. Defaults to **the directory containing `tarmac.toml`**.
 
 ## License
