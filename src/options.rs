@@ -33,6 +33,9 @@ pub enum Subcommand {
 
     /// Sync your Tarmac project, uploading any assets that have changed.
     Sync(SyncOptions),
+
+    /// Create a file that maps paths to uploaded asset IDs.
+    CreatePathMap(CreatePathMapOptions),
 }
 
 #[derive(Debug, StructOpt)]
@@ -89,4 +92,12 @@ impl FromStr for SyncTarget {
             )),
         }
     }
+}
+
+#[derive(Debug, StructOpt)]
+pub struct CreatePathMapOptions {
+    pub project_path: Option<PathBuf>,
+
+    #[structopt(long, short)]
+    pub output: PathBuf,
 }
