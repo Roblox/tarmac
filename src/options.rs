@@ -98,6 +98,9 @@ impl FromStr for SyncTarget {
 pub struct CreatePathMapOptions {
     pub project_path: Option<PathBuf>,
 
-    #[structopt(long, short)]
-    pub output: PathBuf,
+    #[structopt(long = "cache-dir")]
+    pub cache_dir: PathBuf,
+
+    #[structopt(long = "index-file")]
+    pub index_file: PathBuf,
 }
