@@ -209,6 +209,7 @@ impl SyncSession {
     /// Find all files on the filesystem referenced as inputs by our configs.
     fn discover_inputs(&mut self) -> Result<(), SyncError> {
         let inputs = &mut self.inputs;
+        let root_config_path = &self.configs[0].folder();
 
         // Starting with our root config, iterate over all configs and find all
         // relevant inputs
@@ -235,7 +236,7 @@ impl SyncSession {
                 for matching in filtered_paths {
                     let path = matching.into_path();
 
-                    let name = AssetName::from_paths(config_path, &path);
+                    let name = AssetName::from_paths(&root_config_path, &path);
                     log::trace!("Found input {}", name);
 
                     let path_info = dpi_scale::extract_path_info(&path);
