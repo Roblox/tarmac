@@ -38,12 +38,14 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
     fn upload(&mut self, data: UploadInfo) -> Result<UploadResponse, Error> {
         log::info!("Uploading {} to Roblox", &data.name);
 
-        let result = self.api_client.upload_image(ImageUploadData {
-            image_data: Cow::Owned(data.contents),
-            name: &data.name,
-            description: "Uploaded by Tarmac.",
-            group_id: self.upload_to_group_id,
-        });
+        let result = self
+            .api_client
+            .upload_image_with_moderation_retry(ImageUploadData {
+                image_data: Cow::Owned(data.contents),
+                name: &data.name,
+                description: "Uploaded by Tarmac.",
+                group_id: self.upload_to_group_id,
+            });
 
         match result {
             Ok(response) => {
