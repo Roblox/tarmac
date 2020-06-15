@@ -25,8 +25,8 @@ fn run(options: Options) -> Result<(), anyhow::Error> {
             commands::upload_image(options.global, upload_options)
         }
         Subcommand::Sync(sync_options) => commands::sync(options.global, sync_options)?,
-        Subcommand::CreatePathMap(sub_options) => {
-            commands::create_path_map(options.global, sub_options)?
+        Subcommand::CreateCacheMap(sub_options) => {
+            commands::create_cache_map(options.global, sub_options)?
         }
     }
 

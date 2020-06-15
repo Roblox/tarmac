@@ -35,7 +35,7 @@ pub enum Subcommand {
     Sync(SyncOptions),
 
     /// Create a file that maps paths to uploaded asset IDs.
-    CreatePathMap(CreatePathMapOptions),
+    CreateCacheMap(CreateCacheMapOptions),
 }
 
 #[derive(Debug, StructOpt)]
@@ -95,7 +95,7 @@ impl FromStr for SyncTarget {
 }
 
 #[derive(Debug, StructOpt)]
-pub struct CreatePathMapOptions {
+pub struct CreateCacheMapOptions {
     pub project_path: Option<PathBuf>,
 
     #[structopt(long = "cache-dir")]

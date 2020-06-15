@@ -6,10 +6,13 @@ use fs_err as fs;
 
 use crate::asset_name::AssetName;
 use crate::data::Manifest;
-use crate::options::{CreatePathMapOptions, GlobalOptions};
+use crate::options::{CreateCacheMapOptions, GlobalOptions};
 use crate::roblox_web_api::RobloxApiClient;
 
-pub fn create_path_map(global: GlobalOptions, options: CreatePathMapOptions) -> anyhow::Result<()> {
+pub fn create_cache_map(
+    global: GlobalOptions,
+    options: CreateCacheMapOptions,
+) -> anyhow::Result<()> {
     let mut api_client = RobloxApiClient::new(global.auth);
 
     let project_path = match options.project_path {
