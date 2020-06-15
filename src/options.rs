@@ -34,7 +34,8 @@ pub enum Subcommand {
     /// Sync your Tarmac project, uploading any assets that have changed.
     Sync(SyncOptions),
 
-    /// Create a file that maps paths to uploaded asset IDs.
+    /// Downloads any packed spritesheets, then generates a file mapping asset
+    /// IDs to file paths.
     CreateCacheMap(CreateCacheMapOptions),
 }
 
@@ -98,9 +99,11 @@ impl FromStr for SyncTarget {
 pub struct CreateCacheMapOptions {
     pub project_path: Option<PathBuf>,
 
+    /// A path to a directory to put any downloaded packed images.
     #[structopt(long = "cache-dir")]
     pub cache_dir: PathBuf,
 
+    /// A path to a file to contain the cache mapping.
     #[structopt(long = "index-file")]
     pub index_file: PathBuf,
 }
