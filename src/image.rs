@@ -59,7 +59,15 @@ impl Image {
         let (info, mut reader) = decoder.read_info()?;
 
         // TODO: Transcode images to RGBA if possible
-        assert!(info.color_type == png::ColorType::RGBA);
+        if info.color_type != png::ColorType::RGBA {
+            return Err(png::DecodingError::Other(
+                format!(
+                    "Color format {:?} is not supported by Tarmac.",
+                    info.color_type
+                )
+                .into(),
+            ));
+        }
 
         let mut data = vec![0; info.buffer_size()];
         reader.next_frame(&mut data)?;
