@@ -1,11 +1,11 @@
 # Tarmac Changelog
 
 ## Unreleased Changes
-* Added support for automatically retrying image uploads when image names are moderated. ([#26](https://github.com/rojo-rbx/tarmac/issues/26))
-* Added `create-cache-map` subcommand to aid in prepopulating asset caches. ([#38](https://github.com/rojo-rbx/tarmac/pull/38))
+* Added support for automatically retrying image uploads when image names are moderated. ([#26](https://github.com/Roblox/tarmac/issues/26))
+* Added `create-cache-map` subcommand to aid in prepopulating asset caches. ([#38](https://github.com/Roblox/tarmac/pull/38))
 
 ## 0.5.0 (2020-06-01)
-* **Breaking**: Codegen style is no longer configurable. The correct codegen style is now chosen based on the kind of input. ([#28](https://github.com/rojo-rbx/tarmac/pull/28))
+* **Breaking**: Codegen style is no longer configurable. The correct codegen style is now chosen based on the kind of input. ([#28](https://github.com/Roblox/tarmac/pull/28))
 * **Breaking**: `includes` is now a list of paths instead of a list of objects.
 * **Breaking**: Renamed `base-path` to `codegen-base-path` to better reflect its purpose.
 * Removed (unimplemented) `content-folder` target and added `none` target.
@@ -19,12 +19,12 @@
 
 ## 0.4.0 (2020-03-04)
 * Tarmac now "alpha-bleeds" packed image spritesheets to prevent artifacts from appearing when resized in Roblox.
-* Reworked Tarmac's codegen strategy. ([#22](https://github.com/rojo-rbx/tarmac/pull/22)
+* Reworked Tarmac's codegen strategy. ([#22](https://github.com/Roblox/tarmac/pull/22)
 	* Inputs can now specify `codegen-path` and `base-path` to group together modules.
 	* This helps reduce diff noise drastically.
 
 ## 0.3.1 (2020-02-04)
-* Fixed `tarmac sync` sometimes re-uploading more images than it should. ([#19](https://github.com/rojo-rbx/tarmac/pull/19))
+* Fixed `tarmac sync` sometimes re-uploading more images than it should. ([#19](https://github.com/Roblox/tarmac/pull/19))
 * Updated `tarmac-manifest.toml` to require hashes. This might cause errors when upgrading to 0.3.1; they can be fixed by deleting your manifest and syncing again.
 
 ## 0.3.0 (2020-01-31)

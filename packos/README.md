@@ -3,8 +3,8 @@
 </div>
 
 <div align="center">
-    <a href="https://github.com/rojo-rbx/tarmac/actions">
-        <img src="https://github.com/rojo-rbx/tarmac/workflows/CI/badge.svg" alt="GitHub Actions status" />
+    <a href="https://github.com/Roblox/tarmac/actions">
+        <img src="https://github.com/Roblox/tarmac/workflows/CI/badge.svg" alt="GitHub Actions status" />
     </a>
     <a href="https://crates.io/crates/packos">
         <img src="https://img.shields.io/crates/v/packos.svg?label=latest%20release" alt="Latest release" />
@@ -16,7 +16,7 @@
 
 <hr />
 
-Packos is a small library for packing rectangles. It was built for [Tarmac](https://github.com/rojo-rbx/tarmac), a tool that manages assets for Roblox projects, including packing images into spritesheets.
+Packos is a small library for packing rectangles. It was built for [Tarmac](https://github.com/Roblox/tarmac), a tool that manages assets for Roblox projects, including packing images into spritesheets.
 
 It's designed to:
 
