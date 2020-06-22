@@ -3,8 +3,8 @@
 </div>
 
 <div align="center">
-    <a href="https://github.com/rojo-rbx/tarmac/actions">
-        <img src="https://github.com/rojo-rbx/tarmac/workflows/CI/badge.svg" alt="GitHub Actions status" />
+    <a href="https://github.com/Roblox/tarmac/actions">
+        <img src="https://github.com/Roblox/tarmac/workflows/CI/badge.svg" alt="GitHub Actions status" />
     </a>
     <a href="https://crates.io/crates/tarmac">
         <img src="https://img.shields.io/crates/v/tarmac.svg?label=latest%20release" alt="Latest release" />
@@ -12,6 +12,8 @@
 </div>
 
 <hr />
+
+**Heads up! This repository was recently migrated from [the rojo-rbx org](https://github.com/rojo-rbx) to [the Roblox org](https://github.com/Roblox). Not much else has changed.**
 
 Tarmac is a resource compiler and asset manager for Roblox projects. It helps enable hermetic place builds when used with tools like [Rojo](https://github.com/rojo-rbx/rojo).
 
@@ -25,11 +27,11 @@ The recommended way to install Tarmac is with [Foreman](https://github.com/rojo-
 Add an entry to the `[tools]` section of your `foreman.toml` file:
 
 ```toml
-foreman = { source = "rojo-rbx/tarmac", version = "0.5.0" }
+foreman = { source = "Roblox/tarmac", version = "0.5.0" }
 ```
 
 ### Installing from GitHub Releases
-Pre-built binaries are available for 64-bit Windows, macOS, and Linux from the [GitHub releases page](https://github.com/rojo-rbx/tarmac/releases).
+Pre-built binaries are available for 64-bit Windows, macOS, and Linux from the [GitHub releases page](https://github.com/Roblox/tarmac/releases).
 
 ### Installing from Source
 Tarmac requires Rust 1.39.0 or newer to build.
@@ -43,7 +45,7 @@ cargo install tarmac
 or build the latest work from the master branch:
 
 ```bash
-cargo install --git https://github.com/rojo-rbx/tarmac
+cargo install --git https://github.com/Roblox/tarmac
 ```
 
 ## Basic Example

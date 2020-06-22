@@ -1,5 +1,5 @@
 //! Packos is a small library for packing rectangles. It was built for
-//! [Tarmac](https://github.com/rojo-rbx/tarmac), a tool that manages assets for
+//! [Tarmac](https://github.com/Roblox/tarmac), a tool that manages assets for
 //! Roblox projects, including packing images into spritesheets.
 //!
 //! Packos currently exposes a single packing implementation,
