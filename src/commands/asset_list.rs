@@ -9,7 +9,7 @@ use crate::options::{AssetListOptions, GlobalOptions};
 
 pub fn asset_list(_global: GlobalOptions, options: AssetListOptions) -> anyhow::Result<()> {
     let project_path = match options.project_path {
-        Some(path) => path.clone(),
+        Some(path) => path,
         None => env::current_dir()?,
     };
 
