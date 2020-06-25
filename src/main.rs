@@ -28,6 +28,7 @@ fn run(options: Options) -> Result<(), anyhow::Error> {
         Subcommand::CreateCacheMap(sub_options) => {
             commands::create_cache_map(options.global, sub_options)?
         }
+        Subcommand::AssetList(sub_options) => commands::asset_list(options.global, sub_options)?,
     }
 
     Ok(())
