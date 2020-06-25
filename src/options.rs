@@ -37,6 +37,9 @@ pub enum Subcommand {
     /// Downloads any packed spritesheets, then generates a file mapping asset
     /// IDs to file paths.
     CreateCacheMap(CreateCacheMapOptions),
+
+    /// Creates a file that lists all assets required by the project.
+    AssetList(AssetListOptions),
 }
 
 #[derive(Debug, StructOpt)]
@@ -106,4 +109,13 @@ pub struct CreateCacheMapOptions {
     /// A path to a file to contain the cache mapping.
     #[structopt(long = "index-file")]
     pub index_file: PathBuf,
+}
+
+#[derive(Debug, StructOpt)]
+pub struct AssetListOptions {
+    pub project_path: Option<PathBuf>,
+
+    /// A path to a file to put the asset list.
+    #[structopt(long = "cache-dir")]
+    pub output: PathBuf,
 }
