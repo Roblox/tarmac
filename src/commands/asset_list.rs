@@ -7,7 +7,7 @@ use fs_err as fs;
 use crate::data::Manifest;
 use crate::options::{AssetListOptions, GlobalOptions};
 
-pub fn asset_list(global: GlobalOptions, options: AssetListOptions) -> anyhow::Result<()> {
+pub fn asset_list(_global: GlobalOptions, options: AssetListOptions) -> anyhow::Result<()> {
     let project_path = match options.project_path {
         Some(path) => path.clone(),
         None => env::current_dir()?,
@@ -16,7 +16,7 @@ pub fn asset_list(global: GlobalOptions, options: AssetListOptions) -> anyhow::R
     let manifest = Manifest::read_from_folder(&project_path)?;
 
     let mut asset_list = BTreeSet::new();
-    for (name, input_manifest) in &manifest.inputs {
+    for input_manifest in manifest.inputs.values() {
         if let Some(id) = input_manifest.id {
             asset_list.insert(id);
         }
