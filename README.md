@@ -140,6 +140,37 @@ Example:
 tarmac upload-image foo.png --name "Foo" --description "Foo is a placeholder name."
 ```
 
+### `tarmac asset-list`
+Outputs a list of all of the asset IDs referenced by the project. Each ID is separated by a newline.
+
+Usage:
+```bash
+tarmac asset-list [<config-path>] \
+	--output <file-path>
+```
+
+Example:
+```bash
+tarmac asset-list --output asset-list.txt
+```
+
+### `tarmac create-cache-map`
+Creates a mapping from asset IDs back to their source files. Also downloads packaged images to a given folder, generating links to those assets as well.
+
+The mapping file is JSON.
+
+Usage:
+```bash
+tarmac create-cache-map [<config-path>] \
+	--index-file <file-path> \
+	--cache-dir <cache-folder>
+```
+
+Example:
+```bash
+tarmac create-cache-map --index-file assets.json --cache-dir asset-cache
+```
+
 ### `tarmac help`
 Prints help information about Tarmac itself, or the given subcommand.
 

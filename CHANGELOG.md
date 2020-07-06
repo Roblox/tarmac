@@ -3,6 +3,7 @@
 ## Unreleased Changes
 * Added support for automatically retrying image uploads when image names are moderated. ([#26](https://github.com/Roblox/tarmac/issues/26))
 * Added `create-cache-map` subcommand to aid in prepopulating asset caches. ([#38](https://github.com/Roblox/tarmac/pull/38))
+* Added `asset-list` subcommand to generate a plaintext list of referenced asset IDs.
 
 ## 0.5.0 (2020-06-01)
 * **Breaking**: Codegen style is no longer configurable. The correct codegen style is now chosen based on the kind of input. ([#28](https://github.com/Roblox/tarmac/pull/28))

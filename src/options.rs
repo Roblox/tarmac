@@ -116,6 +116,6 @@ pub struct AssetListOptions {
     pub project_path: Option<PathBuf>,
 
     /// A path to a file to put the asset list.
-    #[structopt(long = "cache-dir")]
+    #[structopt(long = "output")]
     pub output: PathBuf,
 }
