@@ -4,10 +4,10 @@
 
 use std::collections::VecDeque;
 
-use crate::image::{Image, Pixel};
+use image::{DynamicImage, Rgba, GenericImage, GenericImageView};
 
-pub(crate) fn alpha_bleed(image: &mut Image) {
-    let (w, h) = image.size();
+pub(crate) fn alpha_bleed(img: &mut DynamicImage) {
+    let (w, h) = img.dimensions();
 
     // Tells whether a given position has been touched by the bleeding algorithm
     // yet and is safe to sample colors from. In the first pass, we'll set all
@@ -45,9 +45,9 @@ pub(crate) fn alpha_bleed(image: &mut Image) {
     // are valid to sample from.
     for y in 0..h {
         for x in 0..w {
-            let pixel = image.get_pixel((x, y));
+            let pixel = img.get_pixel(x, y);
 
-            if pixel.a != 0 {
+            if pixel[3] != 0 {
                 // This pixel is not totally transparent, so we don't need to
                 // modify it. We'll add it to the `can_be_sampled` set to
                 // indicate it's okay to sample from this pixel.
@@ -58,8 +58,8 @@ pub(crate) fn alpha_bleed(image: &mut Image) {
 
             // Check if any adjacent pixels have non-zero alpha.
             let borders_opaque = adjacent_positions(x, y).any(|(x_source, y_source)| {
-                let source = image.get_pixel((x_source, y_source));
-                source.a != 0
+                let source = img.get_pixel(x_source, y_source);
+                source[3] != 0
             });
 
             if borders_opaque {
@@ -80,26 +80,26 @@ pub(crate) fn alpha_bleed(image: &mut Image) {
 
         for (x_source, y_source) in adjacent_positions(x, y) {
             if can_be_sampled.get(x_source, y_source) {
-                let source = image.get_pixel((x_source, y_source));
+                let source = img.get_pixel(x_source, y_source);
 
                 contributing += 1;
-                new_color.0 += source.r as u16;
-                new_color.1 += source.g as u16;
-                new_color.2 += source.b as u16;
+                new_color.0 += source[0] as u16;
+                new_color.1 += source[1] as u16;
+                new_color.2 += source[3] as u16;
             } else if !visited.get(x_source, y_source) {
                 visited.set(x_source, y_source);
                 to_visit.push_back((x_source, y_source));
             }
         }
 
-        let new_color = Pixel::new(
+        let pixel = Rgba([
             (new_color.0 / contributing) as u8,
             (new_color.1 / contributing) as u8,
             (new_color.2 / contributing) as u8,
             0,
-        );
+        ]);
 
-        image.set_pixel((x, y), new_color);
+        img.put_pixel(x, y, pixel);
 
         // Now that we've bled this pixel, it's eligible to be sampled from for
         // future iterations.
