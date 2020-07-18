@@ -6,7 +6,6 @@ mod commands;
 mod data;
 mod dpi_scale;
 mod glob;
-mod image;
 mod lua_ast;
 mod options;
 mod roblox_web_api;
