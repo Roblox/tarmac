@@ -10,7 +10,7 @@ use packos::{InputItem, SimplePacker};
 use thiserror::Error;
 use walkdir::WalkDir;
 
-use image::{DynamicImage, GenericImageView, ImageError, png::PNGEncoder, imageops};
+use image::{imageops, png::PNGEncoder, DynamicImage, GenericImageView, ImageError};
 
 use crate::{
     alpha_bleed::alpha_bleed,
@@ -440,7 +440,14 @@ impl SyncSession {
         let (width, height) = packed_image.img.dimensions();
 
         let encoder = PNGEncoder::new(&mut encoded_image);
-        encoder.encode(&packed_image.img.to_bytes(), width, height, packed_image.img.color()).unwrap();
+        encoder
+            .encode(
+                &packed_image.img.to_bytes(),
+                width,
+                height,
+                packed_image.img.color(),
+            )
+            .unwrap();
 
         let hash = generate_asset_hash(&encoded_image);
 
@@ -477,10 +484,12 @@ impl SyncSession {
         alpha_bleed(&mut img);
 
         let (width, height) = img.dimensions();
-        
+
         let mut encoded_image: Vec<u8> = Vec::new();
         let encoder = PNGEncoder::new(&mut encoded_image);
-        encoder.encode(&img.to_bytes(), width, height, img.color()).unwrap();
+        encoder
+            .encode(&img.to_bytes(), width, height, img.color())
+            .unwrap();
 
         let upload_data = UploadInfo {
             name: input.human_name(),

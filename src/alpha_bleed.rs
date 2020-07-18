@@ -4,7 +4,7 @@
 
 use std::collections::VecDeque;
 
-use image::{DynamicImage, Rgba, GenericImage, GenericImageView};
+use image::{DynamicImage, GenericImage, GenericImageView, Rgba};
 
 pub(crate) fn alpha_bleed(img: &mut DynamicImage) {
     let (w, h) = img.dimensions();
