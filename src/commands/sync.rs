@@ -10,7 +10,7 @@ use packos::{InputItem, SimplePacker};
 use thiserror::Error;
 use walkdir::WalkDir;
 
-use image::{DynamicImage, GenericImageView, ImageError, imageops};
+use image::{DynamicImage, GenericImageView, ImageError, png::PNGEncoder, imageops};
 
 use crate::{
     alpha_bleed::alpha_bleed,
@@ -435,13 +435,18 @@ impl SyncSession {
         backend: &mut S,
         packed_image: &PackedImage,
     ) -> Result<(), SyncError> {
-        let encoded_image = packed_image.img.to_bytes();
+        let mut encoded_image: Vec<u8> = Vec::new();
+
+        let (width, height) = packed_image.img.dimensions();
+
+        let encoder = PNGEncoder::new(&mut encoded_image);
+        encoder.encode(&packed_image.img.to_bytes(), width, height, image::ColorType::Rgba8).unwrap();
 
         let hash = generate_asset_hash(&encoded_image);
 
         let upload_data = UploadInfo {
             name: "spritesheet".to_owned(),
-            contents: encoded_image,
+            contents: encoded_image.to_vec(),
             hash: hash.clone(),
         };
 
