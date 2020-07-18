@@ -85,7 +85,7 @@ pub(crate) fn alpha_bleed(img: &mut DynamicImage) {
                 contributing += 1;
                 new_color.0 += source[0] as u16;
                 new_color.1 += source[1] as u16;
-                new_color.2 += source[3] as u16;
+                new_color.2 += source[2] as u16;
             } else if !visited.get(x_source, y_source) {
                 visited.set(x_source, y_source);
                 to_visit.push_back((x_source, y_source));
