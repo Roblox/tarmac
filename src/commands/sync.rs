@@ -440,7 +440,7 @@ impl SyncSession {
         let (width, height) = packed_image.img.dimensions();
 
         let encoder = PNGEncoder::new(&mut encoded_image);
-        encoder.encode(&packed_image.img.to_bytes(), width, height, image::ColorType::Rgba8).unwrap();
+        encoder.encode(&packed_image.img.to_bytes(), width, height, packed_image.img.color()).unwrap();
 
         let hash = generate_asset_hash(&encoded_image);
 
@@ -470,9 +470,21 @@ impl SyncSession {
     ) -> Result<(), SyncError> {
         let input = self.inputs.get_mut(input_name).unwrap();
 
+        let mut img = image::load_from_memory(input.contents.as_slice())?;
+
+        img.save("test.png").unwrap();
+
+        alpha_bleed(&mut img);
+
+        let (width, height) = img.dimensions();
+        
+        let mut encoded_image: Vec<u8> = Vec::new();
+        let encoder = PNGEncoder::new(&mut encoded_image);
+        encoder.encode(&img.to_bytes(), width, height, img.color()).unwrap();
+
         let upload_data = UploadInfo {
             name: input.human_name(),
-            contents: input.contents.clone(),
+            contents: encoded_image.to_vec(),
             hash: input.hash.clone(),
         };
 
