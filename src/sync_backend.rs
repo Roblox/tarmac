@@ -138,7 +138,10 @@ impl<InnerSyncBackend: SyncBackend> SyncBackend for RetryBackend<InnerSyncBacken
                 }
                 self.inner.upload(data.clone())
             })
-            .find(|result| !matches!(result, Err(Error::RateLimited)))
+            .find(|result| match result {
+                Err(Error::RateLimited) => false,
+                _ => true,
+            })
             .unwrap_or(Err(Error::RateLimited))
     }
 }
