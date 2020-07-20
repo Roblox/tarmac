@@ -138,9 +138,7 @@ impl<InnerSyncBackend: SyncBackend> SyncBackend for RetryBackend<InnerSyncBacken
                 }
                 self.inner.upload(data.clone())
             })
-            .find(|result| {
-                !matches!(result, Err(Error::RateLimited))
-            })
+            .find(|result| !matches!(result, Err(Error::RateLimited)))
             .unwrap_or(Err(Error::RateLimited))
     }
 }
@@ -197,8 +195,7 @@ mod test {
         impl<'a> SyncBackend for CountUploads<'a> {
             fn upload(&mut self, _data: UploadInfo) -> Result<UploadResponse, Error> {
                 (*self.counter) += 1;
-                self.results.pop()
-                    .unwrap_or(Err(Error::NoneBackend))
+                self.results.pop().unwrap_or(Err(Error::NoneBackend))
             }
         }
 
@@ -210,16 +207,15 @@ mod test {
             }
         }
 
-        fn retry_duration() -> Duration { Duration::from_millis(1) }
+        fn retry_duration() -> Duration {
+            Duration::from_millis(1)
+        }
 
         #[test]
         fn upload_at_least_once() {
             let mut counter = 0;
-            let mut backend = RetryBackend::new(
-                CountUploads::new(&mut counter),
-                0,
-                retry_duration(),
-            );
+            let mut backend =
+                RetryBackend::new(CountUploads::new(&mut counter), 0, retry_duration());
 
             backend.upload(any_upload_info());
 
@@ -229,12 +225,11 @@ mod test {
         #[test]
         fn upload_again_if_rate_limited() {
             let mut counter = 0;
-            let inner = CountUploads::new(&mut counter)
-                .with_results(vec![
-                    Err(Error::RateLimited),
-                    Err(Error::RateLimited),
-                    Err(Error::NoneBackend),
-                ]);
+            let inner = CountUploads::new(&mut counter).with_results(vec![
+                Err(Error::RateLimited),
+                Err(Error::RateLimited),
+                Err(Error::NoneBackend),
+            ]);
             let mut backend = RetryBackend::new(inner, 5, retry_duration());
 
             backend.upload(any_upload_info());
@@ -246,12 +241,11 @@ mod test {
         fn upload_returns_first_success_result() {
             let mut counter = 0;
             let success = UploadResponse { id: 10 };
-            let inner = CountUploads::new(&mut counter)
-                .with_results(vec![
-                    Err(Error::RateLimited),
-                    Err(Error::RateLimited),
-                    Ok(success.clone()),
-                ]);
+            let inner = CountUploads::new(&mut counter).with_results(vec![
+                Err(Error::RateLimited),
+                Err(Error::RateLimited),
+                Ok(success.clone()),
+            ]);
             let mut backend = RetryBackend::new(inner, 5, retry_duration());
 
             let upload_result = backend.upload(any_upload_info()).unwrap();
@@ -263,13 +257,12 @@ mod test {
         #[test]
         fn upload_returns_rate_limited_when_retries_exhausted() {
             let mut counter = 0;
-            let inner = CountUploads::new(&mut counter)
-                .with_results(vec![
-                    Err(Error::RateLimited),
-                    Err(Error::RateLimited),
-                    Err(Error::RateLimited),
-                    Err(Error::RateLimited),
-                ]);
+            let inner = CountUploads::new(&mut counter).with_results(vec![
+                Err(Error::RateLimited),
+                Err(Error::RateLimited),
+                Err(Error::RateLimited),
+                Err(Error::RateLimited),
+            ]);
             let mut backend = RetryBackend::new(inner, 2, retry_duration());
 
             let upload_result = backend.upload(any_upload_info()).unwrap_err();

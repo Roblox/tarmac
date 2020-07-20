@@ -29,7 +29,8 @@ use crate::{
 
 fn sync_session<B: SyncBackend>(session: &mut SyncSession, options: &SyncOptions, mut backend: B) {
     if let Some(retry) = options.retry {
-        let mut retry_backend = RetryBackend::new(backend, retry, Duration::from_secs(options.retry_delay));
+        let mut retry_backend =
+            RetryBackend::new(backend, retry, Duration::from_secs(options.retry_delay));
         session.sync_with_backend(&mut retry_backend);
     } else {
         session.sync_with_backend(&mut backend);
