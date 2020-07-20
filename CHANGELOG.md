@@ -2,6 +2,8 @@
 
 ## Unreleased Changes
 
+* Added support for automatically retrying uploads when being rate limited. ([#42](https://github.com/Roblox/tarmac/issues/43))
+
 ## 0.6.0 (2020-07-09)
 * Added support for automatically retrying image uploads when image names are moderated. ([#26](https://github.com/Roblox/tarmac/issues/26))
 * Added `create-cache-map` subcommand to aid in prepopulating asset caches. ([#38](https://github.com/Roblox/tarmac/pull/38))
