@@ -133,6 +133,11 @@ impl<InnerSyncBackend: SyncBackend> SyncBackend for RetryBackend<InnerSyncBacken
     fn upload(&mut self, data: UploadInfo) -> Result<UploadResponse, Error> {
         for index in 0..self.attempts {
             if index != 0 {
+                log::info!(
+                    "tarmac is being rate limited, retrying upload ({}/{})",
+                    index,
+                    self.attempts - 1
+                );
                 thread::sleep(self.delay);
             }
             let result = self.inner.upload(data.clone());
