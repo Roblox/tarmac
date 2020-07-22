@@ -131,18 +131,19 @@ impl<InnerSyncBackend> RetryBackend<InnerSyncBackend> {
 
 impl<InnerSyncBackend: SyncBackend> SyncBackend for RetryBackend<InnerSyncBackend> {
     fn upload(&mut self, data: UploadInfo) -> Result<UploadResponse, Error> {
-        (0..self.attempts)
-            .map(|index| {
-                if index != 0 {
-                    thread::sleep(self.delay);
-                }
-                self.inner.upload(data.clone())
-            })
-            .find(|result| match result {
-                Err(Error::RateLimited) => false,
-                _ => true,
-            })
-            .unwrap_or(Err(Error::RateLimited))
+        for index in 0..self.attempts {
+            if index != 0 {
+                thread::sleep(self.delay);
+            }
+            let result = self.inner.upload(data.clone());
+
+            match result {
+                Err(Error::RateLimited) => {}
+                _ => return result,
+            }
+        }
+
+        Err(Error::RateLimited)
     }
 }
 
