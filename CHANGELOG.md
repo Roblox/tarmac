@@ -2,6 +2,7 @@
 
 ## Unreleased Changes
 
+## 0.7.0 (2020-07-23)
 * Added support for automatically retrying uploads when being rate limited. ([#42](https://github.com/Roblox/tarmac/issues/43))
 
 ## 0.6.0 (2020-07-09)
