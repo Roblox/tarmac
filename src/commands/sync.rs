@@ -3,6 +3,7 @@ use std::{
     env,
     io::{self, BufWriter, Write},
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use fs_err as fs;
@@ -21,14 +22,24 @@ use crate::{
     options::{GlobalOptions, SyncOptions, SyncTarget},
     roblox_web_api::{RobloxApiClient, RobloxApiError},
     sync_backend::{
-        DebugSyncBackend, Error as SyncBackendError, NoneSyncBackend, RobloxSyncBackend,
-        SyncBackend, UploadInfo,
+        DebugSyncBackend, Error as SyncBackendError, NoneSyncBackend, RetryBackend,
+        RobloxSyncBackend, SyncBackend, UploadInfo,
     },
 };
 
+fn sync_session<B: SyncBackend>(session: &mut SyncSession, options: &SyncOptions, mut backend: B) {
+    if let Some(retry) = options.retry {
+        let mut retry_backend =
+            RetryBackend::new(backend, retry, Duration::from_secs(options.retry_delay));
+        session.sync_with_backend(&mut retry_backend);
+    } else {
+        session.sync_with_backend(&mut backend);
+    }
+}
+
 pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError> {
-    let fuzzy_config_path = match options.config_path {
-        Some(v) => v,
+    let fuzzy_config_path = match &options.config_path {
+        Some(v) => v.to_owned(),
         None => env::current_dir()?,
     };
 
@@ -39,21 +50,20 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
     session.discover_configs()?;
     session.discover_inputs()?;
 
-    match options.target {
+    match &options.target {
         SyncTarget::Roblox => {
-            let mut backend =
-                RobloxSyncBackend::new(&mut api_client, session.root_config().upload_to_group_id);
-
-            session.sync_with_backend(&mut backend);
+            let group_id = session.root_config().upload_to_group_id;
+            sync_session(
+                &mut session,
+                &options,
+                RobloxSyncBackend::new(&mut api_client, group_id),
+            );
         }
         SyncTarget::None => {
-            let mut backend = NoneSyncBackend;
-
-            session.sync_with_backend(&mut backend);
+            sync_session(&mut session, &options, NoneSyncBackend);
         }
         SyncTarget::Debug => {
-            let mut backend = DebugSyncBackend::new();
-            session.sync_with_backend(&mut backend);
+            sync_session(&mut session, &options, DebugSyncBackend::new());
         }
     }
 

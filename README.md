@@ -113,6 +113,8 @@ Usage:
 ```bash
 tarmac sync [<config-path>] \
 	--target <roblox|debug|none>
+	--retry <number>
+	--retry-delay <60>
 ```
 
 To sync the project in your current working directory with the Roblox cloud, use:
@@ -123,6 +125,11 @@ tarmac sync --target roblox
 To validate that all inputs are already synced, use the `none` target:
 ```bash
 tarmac sync --target none
+```
+
+When tarmac gets rate limited while syncing to Roblox, use the `--retry` argument to automatically attempt to re-upload. This will tell tarmac how many times it can attempt to re-upload each asset. The `--retry-delay` sets the number of seconds to wait between each attempt.
+```bash
+tarmac sync --target roblox --retry 3
 ```
 
 ### `tarmac upload-image`

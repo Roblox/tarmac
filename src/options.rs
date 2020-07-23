@@ -71,6 +71,15 @@ pub struct SyncOptions {
     #[structopt(long)]
     pub target: SyncTarget,
 
+    /// When provided, Tarmac will upload again at most the given number of times
+    /// when it encounters rate limitation errors.
+    #[structopt(long)]
+    pub retry: Option<usize>,
+
+    /// The number of seconds to wait between each re-upload attempts.
+    #[structopt(long, default_value = "60")]
+    pub retry_delay: u64,
+
     /// The path to a Tarmac config, or a folder containing a Tarmac project.
     pub config_path: Option<PathBuf>,
 }
