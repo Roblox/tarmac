@@ -4,7 +4,7 @@ use std::{
 };
 
 use reqwest::{
-    header::{HeaderValue, COOKIE},
+    header::{HeaderMap, HeaderValue, COOKIE},
     Client, Request, Response, StatusCode,
 };
 use serde::{Deserialize, Serialize};
@@ -171,6 +171,7 @@ impl RobloxApiClient {
             Err(RobloxApiError::ResponseError {
                 status: response.status(),
                 body,
+                headers: response.headers().clone(),
             })
         }
     }
@@ -245,5 +246,9 @@ pub enum RobloxApiError {
     },
 
     #[error("Roblox API returned HTTP {status} with body: {body}")]
-    ResponseError { status: StatusCode, body: String },
+    ResponseError {
+        status: StatusCode,
+        body: String,
+        headers: HeaderMap,
+    },
 }

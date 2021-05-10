@@ -759,7 +759,7 @@ impl SyncError {
     pub fn is_rate_limited(&self) -> bool {
         match self {
             Self::Backend {
-                source: SyncBackendError::RateLimited,
+                source: SyncBackendError::RateLimited(_),
             } => true,
             _ => false,
         }
