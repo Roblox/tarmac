@@ -3,6 +3,10 @@ use std::{
     env,
     io::{self, BufWriter, Write},
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -27,14 +31,30 @@ use crate::{
     },
 };
 
-fn sync_session<B: SyncBackend>(session: &mut SyncSession, options: &SyncOptions, mut backend: B) {
+fn sync_session<B: SyncBackend>(
+    session: &mut SyncSession,
+    options: &SyncOptions,
+    mut backend: B,
+    running: Arc<AtomicBool>,
+) {
     if let Some(retry) = options.retry {
         let mut retry_backend =
             RetryBackend::new(backend, retry, Duration::from_secs(options.retry_delay));
-        session.sync_with_backend(&mut retry_backend);
+        session.sync_with_backend(&mut retry_backend, running);
     } else {
-        session.sync_with_backend(&mut backend);
+        session.sync_with_backend(&mut backend, running);
     }
+}
+
+fn finish_session(
+    session: &SyncSession,
+    api_client: &mut RobloxApiClient,
+) -> Result<(), SyncError> {
+    session.write_manifest()?;
+    session.codegen()?;
+    session.write_asset_list()?;
+    session.populate_asset_cache(api_client)?;
+    Ok(())
 }
 
 pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError> {
@@ -50,6 +70,14 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
     session.discover_configs()?;
     session.discover_inputs()?;
 
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        log::info!("Received SIGINT. Tarmac will exit after the current upload.");
+        r.store(false, Ordering::SeqCst)
+    })
+    .unwrap();
+
     match &options.target {
         SyncTarget::Roblox => {
             let group_id = session.root_config().upload_to_group_id;
@@ -57,20 +85,18 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
                 &mut session,
                 &options,
                 RobloxSyncBackend::new(&mut api_client, group_id),
+                running,
             );
         }
         SyncTarget::None => {
-            sync_session(&mut session, &options, NoneSyncBackend);
+            sync_session(&mut session, &options, NoneSyncBackend, running);
         }
         SyncTarget::Debug => {
-            sync_session(&mut session, &options, DebugSyncBackend::new());
+            sync_session(&mut session, &options, DebugSyncBackend::new(), running);
         }
     }
 
-    session.write_manifest()?;
-    session.codegen()?;
-    session.write_asset_list()?;
-    session.populate_asset_cache(&mut api_client)?;
+    finish_session(&session, &mut api_client)?;
 
     if session.sync_errors.is_empty() {
         Ok(())
@@ -288,7 +314,7 @@ impl SyncSession {
         Ok(())
     }
 
-    fn sync_with_backend<S: SyncBackend>(&mut self, backend: &mut S) {
+    fn sync_with_backend<S: SyncBackend>(&mut self, backend: &mut S, running: Arc<AtomicBool>) {
         let mut compatible_input_groups = BTreeMap::new();
 
         for (input_name, input) in &self.inputs {
@@ -313,6 +339,9 @@ impl SyncSession {
 
         'outer: for (kind, group) in compatible_input_groups {
             if kind.packable {
+                if !running.load(Ordering::SeqCst) {
+                    break;
+                }
                 if let Err(err) = self.sync_packable_images(backend, group) {
                     let rate_limited = err.is_rate_limited();
 
@@ -326,6 +355,9 @@ impl SyncSession {
                 }
             } else {
                 for input_name in group {
+                    if !running.load(Ordering::SeqCst) {
+                        break 'outer;
+                    }
                     if let Err(err) = self.sync_unpackable_image(backend, &input_name) {
                         let rate_limited = err.is_rate_limited();
 

@@ -49,6 +49,7 @@ structopt = { version = "0.3", default-features = false }
 thiserror = "1.0.13"
 toml = "0.5.3"
 walkdir = "2.2.9"
+ctrlc = "3.1.9"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.6.2"
