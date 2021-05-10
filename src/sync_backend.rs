@@ -146,10 +146,10 @@ impl<InnerSyncBackend: SyncBackend> SyncBackend for RetryBackend<InnerSyncBacken
                 Err(Error::RateLimited(retry_after)) => {
                     let time = max(self.min_delay, Duration::new(retry_after, 0));
                     log::info!(
-                        "tarmac is being rate limited, retrying upload after {:?} ({} of {} retries)",
+                        "tarmac is being rate limited, retrying upload after {:?} ({} of {} tries failed)",
                         time,
                         index,
-                        self.max_attempts - 1
+                        self.max_attempts
                     );
                     thread::sleep(time);
                     if index == self.max_attempts {
