@@ -3,6 +3,7 @@ use std::{
     env,
     io::{self, BufWriter, Write},
     path::{Path, PathBuf},
+    process::exit,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -73,8 +74,12 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     ctrlc::set_handler(move || {
-        log::info!("Received SIGINT. Tarmac will exit after the current upload.");
-        r.store(false, Ordering::SeqCst)
+        if r.load(Ordering::SeqCst) {
+            exit(130)
+        } else {
+            log::info!("Received SIGINT. Tarmac will exit after the current upload. Press CTRL + C again to exit immediately.");
+            r.store(false, Ordering::SeqCst)
+        }
     })
     .unwrap();
 
