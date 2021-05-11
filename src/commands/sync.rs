@@ -75,10 +75,13 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
     let r = running.clone();
     ctrlc::set_handler(move || {
         if r.load(Ordering::SeqCst) {
-            exit(130)
-        } else {
-            log::info!("Received SIGINT. Tarmac will exit after the current upload. Press CTRL + C again to exit immediately.");
+            log::info!("Received SIGINT. Tarmac will exit after the current upload.");
+            log::info!(
+                "Press CTRL + C again to exit immediately. This will not save the uploaded assets."
+            );
             r.store(false, Ordering::SeqCst)
+        } else {
+            exit(130)
         }
     })
     .unwrap();
