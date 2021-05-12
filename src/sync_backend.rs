@@ -66,15 +66,15 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
                 status: StatusCode::TOO_MANY_REQUESTS,
                 headers,
                 ..
-            }) => Err(Error::RateLimited(
-                headers
+            }) => Err(Error::RateLimited {
+                wait_seconds: headers
                     .get("retry-after")
-                    .unwrap()
+                    .ok_or(RobloxApiError::MissingRetryHeader)?
                     .to_str()
                     .unwrap()
                     .parse()
                     .unwrap(),
-            )),
+            }),
 
             Err(err) => Err(err.into()),
         }
@@ -143,8 +143,8 @@ impl<InnerSyncBackend: SyncBackend> SyncBackend for RetryBackend<InnerSyncBacken
         for index in 1..=self.max_attempts {
             let result = self.inner.upload(data.clone());
             match result {
-                Err(Error::RateLimited(retry_after)) => {
-                    let time = max(self.min_delay, Duration::new(retry_after, 0));
+                Err(Error::RateLimited { wait_seconds }) => {
+                    let time = max(self.min_delay, Duration::new(wait_seconds, 0));
                     log::info!(
                         "tarmac is being rate limited, retrying upload after {:?} ({} of {} tries failed)",
                         time,
@@ -153,7 +153,7 @@ impl<InnerSyncBackend: SyncBackend> SyncBackend for RetryBackend<InnerSyncBacken
                     );
                     thread::sleep(time);
                     if index == self.max_attempts {
-                        return Err(Error::RateLimited(retry_after));
+                        return Err(Error::RateLimited { wait_seconds });
                     }
                 }
                 _ => return result,
@@ -168,8 +168,10 @@ pub enum Error {
     #[error("Cannot upload assets with the 'none' target.")]
     NoneBackend,
 
-    #[error("Tarmac was rate-limited trying to upload assets. Try again in a little bit.")]
-    RateLimited(u64),
+    #[error(
+        "Tarmac was rate-limited trying to upload assets. Try again in `{wait_seconds}` seconds."
+    )]
+    RateLimited { wait_seconds: u64 },
 
     #[error(transparent)]
     Io {
@@ -246,8 +248,8 @@ mod test {
         fn upload_again_if_rate_limited() {
             let mut counter = 0;
             let inner = CountUploads::new(&mut counter).with_results(vec![
-                Err(Error::RateLimited(10)),
-                Err(Error::RateLimited(5)),
+                Err(Error::RateLimited { wait_seconds: 10 }),
+                Err(Error::RateLimited { wait_seconds: 5 }),
                 Err(Error::NoneBackend),
             ]);
             let mut backend = RetryBackend::new(inner, 5, retry_duration());
@@ -262,8 +264,8 @@ mod test {
             let mut counter = 0;
             let success = UploadResponse { id: 10 };
             let inner = CountUploads::new(&mut counter).with_results(vec![
-                Err(Error::RateLimited(10)),
-                Err(Error::RateLimited(5)),
+                Err(Error::RateLimited { wait_seconds: 10 }),
+                Err(Error::RateLimited { wait_seconds: 5 }),
                 Ok(success.clone()),
             ]);
             let mut backend = RetryBackend::new(inner, 5, retry_duration());
@@ -278,10 +280,10 @@ mod test {
         fn upload_returns_rate_limited_when_retries_exhausted() {
             let mut counter = 0;
             let inner = CountUploads::new(&mut counter).with_results(vec![
-                Err(Error::RateLimited(10)),
-                Err(Error::RateLimited(10)),
-                Err(Error::RateLimited(10)),
-                Err(Error::RateLimited(10)),
+                Err(Error::RateLimited { wait_seconds: 10 }),
+                Err(Error::RateLimited { wait_seconds: 10 }),
+                Err(Error::RateLimited { wait_seconds: 10 }),
+                Err(Error::RateLimited { wait_seconds: 10 }),
             ]);
             let mut backend = RetryBackend::new(inner, 2, retry_duration());
 
@@ -289,7 +291,7 @@ mod test {
 
             assert_eq!(counter, 3);
             assert!(match upload_result {
-                Error::RateLimited(_) => true,
+                Error::RateLimited { .. } => true,
                 _ => false,
             });
         }

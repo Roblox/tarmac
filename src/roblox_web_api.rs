@@ -251,4 +251,7 @@ pub enum RobloxApiError {
         body: String,
         headers: HeaderMap,
     },
+
+    #[error("Tarmac did not receive a retry-after header from Roblox")]
+    MissingRetryHeader,
 }
