@@ -69,11 +69,10 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
             }) => Err(Error::RateLimited {
                 wait_seconds: headers
                     .get("retry-after")
-                    .ok_or(RobloxApiError::MissingRetryHeader)?
-                    .to_str()
-                    .unwrap()
-                    .parse()
-                    .ok(),
+                    .map(|header| header.to_str().ok())
+                    .flatten()
+                    .map(|header| header.parse().ok())
+                    .flatten(),
             }),
 
             Err(err) => Err(err.into()),
