@@ -73,7 +73,7 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
                     .to_str()
                     .unwrap()
                     .parse()
-                    .unwrap(),
+                    .ok(),
             }),
 
             Err(err) => Err(err.into()),
@@ -144,7 +144,7 @@ impl<InnerSyncBackend: SyncBackend> SyncBackend for RetryBackend<InnerSyncBacken
             let result = self.inner.upload(data.clone());
             match result {
                 Err(Error::RateLimited { wait_seconds }) => {
-                    let time = max(self.min_delay, Duration::new(wait_seconds, 0));
+                    let time = max(self.min_delay, Duration::new(wait_seconds.unwrap_or(0), 0));
                     log::info!(
                         "tarmac is being rate limited, retrying upload after {:?} ({} of {} tries failed)",
                         time,
@@ -159,7 +159,7 @@ impl<InnerSyncBackend: SyncBackend> SyncBackend for RetryBackend<InnerSyncBacken
                 _ => return result,
             }
         }
-        unreachable!()
+        Err(Error::RateLimited { wait_seconds: None })
     }
 }
 
@@ -168,10 +168,8 @@ pub enum Error {
     #[error("Cannot upload assets with the 'none' target.")]
     NoneBackend,
 
-    #[error(
-        "Tarmac was rate-limited trying to upload assets. Try again in `{wait_seconds}` seconds."
-    )]
-    RateLimited { wait_seconds: u64 },
+    #[error("Tarmac was rate-limited trying to upload assets.{}", .wait_seconds.map_or(String::from(""), |seconds| format!(" Try again in {} seconds.", seconds)))]
+    RateLimited { wait_seconds: Option<u64> },
 
     #[error(transparent)]
     Io {
@@ -248,8 +246,12 @@ mod test {
         fn upload_again_if_rate_limited() {
             let mut counter = 0;
             let inner = CountUploads::new(&mut counter).with_results(vec![
-                Err(Error::RateLimited { wait_seconds: 10 }),
-                Err(Error::RateLimited { wait_seconds: 5 }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(5),
+                }),
                 Err(Error::NoneBackend),
             ]);
             let mut backend = RetryBackend::new(inner, 5, retry_duration());
@@ -264,8 +266,12 @@ mod test {
             let mut counter = 0;
             let success = UploadResponse { id: 10 };
             let inner = CountUploads::new(&mut counter).with_results(vec![
-                Err(Error::RateLimited { wait_seconds: 10 }),
-                Err(Error::RateLimited { wait_seconds: 5 }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(5),
+                }),
                 Ok(success.clone()),
             ]);
             let mut backend = RetryBackend::new(inner, 5, retry_duration());
@@ -280,10 +286,18 @@ mod test {
         fn upload_returns_rate_limited_when_retries_exhausted() {
             let mut counter = 0;
             let inner = CountUploads::new(&mut counter).with_results(vec![
-                Err(Error::RateLimited { wait_seconds: 10 }),
-                Err(Error::RateLimited { wait_seconds: 10 }),
-                Err(Error::RateLimited { wait_seconds: 10 }),
-                Err(Error::RateLimited { wait_seconds: 10 }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
             ]);
             let mut backend = RetryBackend::new(inner, 2, retry_duration());
 
