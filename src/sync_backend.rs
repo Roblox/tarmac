@@ -69,10 +69,8 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
             }) => Err(Error::RateLimited {
                 wait_seconds: headers
                     .get("retry-after")
-                    .map(|header| header.to_str().ok())
-                    .flatten()
-                    .map(|header| header.parse().ok())
-                    .flatten(),
+                    .and_then(|header| header.to_str().ok())
+                    .and_then(|header| header.parse().ok()),
             }),
 
             Err(err) => Err(err.into()),
