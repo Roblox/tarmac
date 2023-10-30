@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    convert::TryInto,
     env,
     io::{self, BufWriter, Write},
     path::{Path, PathBuf},
@@ -7,6 +8,7 @@ use std::{
 };
 
 use fs_err as fs;
+use indicatif::ProgressBar;
 use packos::{InputItem, SimplePacker};
 use thiserror::Error;
 use walkdir::WalkDir;
@@ -311,8 +313,17 @@ impl SyncSession {
             input_group.push(input_name.clone());
         }
 
+        let total_count = compatible_input_groups.iter().fold(0, |a, (kind, group)| {
+            if kind.packable {
+                a + 1
+            } else {
+                a + group.len()
+            }
+        });
+        let bar = ProgressBar::new(total_count.try_into().unwrap());
         'outer: for (kind, group) in compatible_input_groups {
             if kind.packable {
+                bar.inc(1);
                 if let Err(err) = self.sync_packable_images(backend, group) {
                     let rate_limited = err.is_rate_limited();
 
@@ -326,6 +337,7 @@ impl SyncSession {
                 }
             } else {
                 for input_name in group {
+                    bar.inc(1);
                     if let Err(err) = self.sync_unpackable_image(backend, &input_name) {
                         let rate_limited = err.is_rate_limited();
 
