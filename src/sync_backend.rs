@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io, path::Path, thread, time::Duration};
+use std::{borrow::Cow, cmp::max, io, path::Path, thread, time::Duration};
 
 use fs_err as fs;
 use reqwest::StatusCode;
@@ -64,8 +64,14 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
 
             Err(RobloxApiError::ResponseError {
                 status: StatusCode::TOO_MANY_REQUESTS,
+                headers,
                 ..
-            }) => Err(Error::RateLimited),
+            }) => Err(Error::RateLimited {
+                wait_seconds: headers
+                    .get("retry-after")
+                    .and_then(|header| header.to_str().ok())
+                    .and_then(|header| header.parse().ok()),
+            }),
 
             Err(err) => Err(err.into()),
         }
@@ -112,43 +118,45 @@ impl SyncBackend for DebugSyncBackend {
 /// data.
 pub struct RetryBackend<InnerSyncBackend> {
     inner: InnerSyncBackend,
-    delay: Duration,
-    attempts: usize,
+    min_delay: Duration,
+    max_attempts: usize,
 }
 
 impl<InnerSyncBackend> RetryBackend<InnerSyncBackend> {
     /// Creates a new backend from another SyncBackend. The max_retries parameter gives the number
     /// of times the backend will try again (so given 0, it acts just as the original SyncBackend).
     /// The delay parameter provides the amount of time to wait between each upload attempt.
-    pub fn new(inner: InnerSyncBackend, max_retries: usize, delay: Duration) -> Self {
+    pub fn new(inner: InnerSyncBackend, retries: usize, min_delay: Duration) -> Self {
         Self {
             inner,
-            delay,
-            attempts: max_retries + 1,
+            min_delay,
+            max_attempts: retries + 1,
         }
     }
 }
 
 impl<InnerSyncBackend: SyncBackend> SyncBackend for RetryBackend<InnerSyncBackend> {
     fn upload(&mut self, data: UploadInfo) -> Result<UploadResponse, Error> {
-        for index in 0..self.attempts {
-            if index != 0 {
-                log::info!(
-                    "tarmac is being rate limited, retrying upload ({}/{})",
-                    index,
-                    self.attempts - 1
-                );
-                thread::sleep(self.delay);
-            }
+        for index in 1..=self.max_attempts {
             let result = self.inner.upload(data.clone());
-
             match result {
-                Err(Error::RateLimited) => {}
+                Err(Error::RateLimited { wait_seconds }) => {
+                    let time = max(self.min_delay, Duration::new(wait_seconds.unwrap_or(0), 0));
+                    log::info!(
+                        "tarmac is being rate limited, retrying upload after {:?} ({} of {} tries failed)",
+                        time,
+                        index,
+                        self.max_attempts
+                    );
+                    thread::sleep(time);
+                    if index == self.max_attempts {
+                        return Err(Error::RateLimited { wait_seconds });
+                    }
+                }
                 _ => return result,
             }
         }
-
-        Err(Error::RateLimited)
+        Err(Error::RateLimited { wait_seconds: None })
     }
 }
 
@@ -157,8 +165,8 @@ pub enum Error {
     #[error("Cannot upload assets with the 'none' target.")]
     NoneBackend,
 
-    #[error("Tarmac was rate-limited trying to upload assets. Try again in a little bit.")]
-    RateLimited,
+    #[error("Tarmac was rate-limited trying to upload assets.{}", .wait_seconds.map_or(String::from(""), |seconds| format!(" Try again in {} seconds.", seconds)))]
+    RateLimited { wait_seconds: Option<u64> },
 
     #[error(transparent)]
     Io {
@@ -235,8 +243,12 @@ mod test {
         fn upload_again_if_rate_limited() {
             let mut counter = 0;
             let inner = CountUploads::new(&mut counter).with_results(vec![
-                Err(Error::RateLimited),
-                Err(Error::RateLimited),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(5),
+                }),
                 Err(Error::NoneBackend),
             ]);
             let mut backend = RetryBackend::new(inner, 5, retry_duration());
@@ -251,8 +263,12 @@ mod test {
             let mut counter = 0;
             let success = UploadResponse { id: 10 };
             let inner = CountUploads::new(&mut counter).with_results(vec![
-                Err(Error::RateLimited),
-                Err(Error::RateLimited),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(5),
+                }),
                 Ok(success.clone()),
             ]);
             let mut backend = RetryBackend::new(inner, 5, retry_duration());
@@ -267,10 +283,18 @@ mod test {
         fn upload_returns_rate_limited_when_retries_exhausted() {
             let mut counter = 0;
             let inner = CountUploads::new(&mut counter).with_results(vec![
-                Err(Error::RateLimited),
-                Err(Error::RateLimited),
-                Err(Error::RateLimited),
-                Err(Error::RateLimited),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
+                Err(Error::RateLimited {
+                    wait_seconds: Some(10),
+                }),
             ]);
             let mut backend = RetryBackend::new(inner, 2, retry_duration());
 
@@ -278,7 +302,7 @@ mod test {
 
             assert_eq!(counter, 3);
             assert!(match upload_result {
-                Error::RateLimited => true,
+                Error::RateLimited { .. } => true,
                 _ => false,
             });
         }
