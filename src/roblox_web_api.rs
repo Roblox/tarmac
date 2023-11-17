@@ -213,11 +213,9 @@ impl RobloxApiClient {
     /// Roblox API, like authentication and CSRF protection.
     fn attach_headers(&self, request: &mut Request) {
         if let Some(auth_token) = &self.auth_token {
-            let cookie_value = format!(".ROBLOSECURITY={}", auth_token);
-
             request.headers_mut().insert(
                 COOKIE,
-                HeaderValue::from_bytes(cookie_value.as_bytes()).unwrap(),
+                HeaderValue::from_bytes(auth_token.as_bytes()).unwrap(),
             );
         }
 

@@ -14,7 +14,6 @@ use walkdir::WalkDir;
 use crate::{
     alpha_bleed::alpha_bleed,
     asset_name::AssetName,
-    auth_cookie::get_auth_cookie,
     codegen::perform_codegen,
     data::{Config, ConfigError, ImageSlice, InputManifest, Manifest, ManifestError, SyncInput},
     dpi_scale,
@@ -43,7 +42,7 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
         None => env::current_dir()?,
     };
 
-    let mut api_client = RobloxApiClient::new(global.auth.or_else(get_auth_cookie));
+    let mut api_client = RobloxApiClient::new(global.auth.or_else(rbx_cookie::get));
 
     let mut session = SyncSession::new(&fuzzy_config_path)?;
 

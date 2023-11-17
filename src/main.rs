@@ -1,6 +1,5 @@
 mod alpha_bleed;
 mod asset_name;
-mod auth_cookie;
 mod codegen;
 mod commands;
 mod data;

@@ -3,7 +3,6 @@ use std::borrow::Cow;
 use fs_err as fs;
 
 use crate::{
-    auth_cookie::get_auth_cookie,
     options::{GlobalOptions, UploadImageOptions},
     roblox_web_api::{ImageUploadData, RobloxApiClient},
 };
@@ -12,8 +11,10 @@ pub fn upload_image(global: GlobalOptions, options: UploadImageOptions) {
     let auth = global
         .auth
         .clone()
-        .or_else(get_auth_cookie)
+        .or_else(rbx_cookie::get)
         .expect("no auth cookie found");
+
+    eprintln!("Auth cookie: {}", auth);
 
     let image_data = fs::read(options.path).expect("couldn't read input file");
 
