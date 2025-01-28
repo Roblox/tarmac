@@ -14,13 +14,13 @@ use walkdir::WalkDir;
 use crate::{
     alpha_bleed::alpha_bleed,
     asset_name::AssetName,
-    auth_cookie::get_auth_cookie,
     codegen::perform_codegen,
     data::{Config, ConfigError, ImageSlice, InputManifest, Manifest, ManifestError, SyncInput},
     dpi_scale,
     image::Image,
     options::{GlobalOptions, SyncOptions, SyncTarget},
-    roblox_web_api::{RobloxApiClient, RobloxApiError},
+    roblox_web_api::{RobloxApiClient, RobloxApiError, RobloxOpenCloudCredentials},
+    roblox_web_api_types::RobloxAuthenticationError,
     sync_backend::{
         DebugSyncBackend, Error as SyncBackendError, NoneSyncBackend, RetryBackend,
         RobloxSyncBackend, SyncBackend, UploadInfo,
@@ -43,7 +43,8 @@ pub fn sync(global: GlobalOptions, options: SyncOptions) -> Result<(), SyncError
         None => env::current_dir()?,
     };
 
-    let mut api_client = RobloxApiClient::new(global.auth.or_else(get_auth_cookie));
+    let credentials = RobloxOpenCloudCredentials::get_credentials(global.auth, global.api_key)?;
+    let mut api_client = RobloxApiClient::new(credentials);
 
     let mut session = SyncSession::new(&fuzzy_config_path)?;
 
@@ -752,6 +753,12 @@ pub enum SyncError {
     RobloxApi {
         #[from]
         source: RobloxApiError,
+    },
+
+    #[error(transparent)]
+    RobloxAuthenticationError {
+        #[from]
+        source: RobloxAuthenticationError,
     },
 }
 

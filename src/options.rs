@@ -20,6 +20,10 @@ pub struct GlobalOptions {
     #[structopt(long, global(true))]
     pub auth: Option<String>,
 
+    /// The Open Cloud API key tarmac will use to upload assets.
+    #[structopt(long, global(true))]
+    pub api_key: Option<String>,
+
     /// Sets verbosity level. Can be specified multiple times.
     #[structopt(long = "verbose", short, global(true), parse(from_occurrences))]
     pub verbosity: u8,
@@ -54,6 +58,14 @@ pub struct UploadImageOptions {
     /// The description to give to the resulting Decal asset.
     #[structopt(long, default_value = "Uploaded by Tarmac.")]
     pub description: String,
+
+    /// The ID of the user to upload to. Not compatible with `group_id`.
+    #[structopt(long)]
+    pub group_id: Option<u64>,
+
+    /// The ID of the group to upload to. Not compatible with `user_id`.
+    #[structopt(long)]
+    pub user_id: Option<u64>,
 }
 
 #[derive(Debug, StructOpt)]

@@ -1,10 +1,12 @@
 use std::{borrow::Cow, io, path::Path, thread, time::Duration};
 
+use crate::roblox_web_api::{RobloxApiClient, RobloxApiError, DECAL};
+use crate::roblox_web_api_types::{
+    ImageUploadData, ImageUploadMetadata, RobloxAuthenticationError,
+};
 use fs_err as fs;
 use reqwest::StatusCode;
 use thiserror::Error;
-
-use crate::roblox_web_api::{ImageUploadData, RobloxApiClient, RobloxApiError};
 
 pub trait SyncBackend {
     fn upload(&mut self, data: UploadInfo) -> Result<UploadResponse, Error>;
@@ -40,25 +42,27 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
     fn upload(&mut self, data: UploadInfo) -> Result<UploadResponse, Error> {
         log::info!("Uploading {} to Roblox", &data.name);
 
+        let upload_data = ImageUploadData {
+            image_data: Cow::Owned(data.contents),
+            image_metadata: ImageUploadMetadata::new(
+                DECAL.to_string(),
+                data.name.to_string(),
+                "Uploaded by Tarmac.".to_string(),
+                None,
+                self.upload_to_group_id,
+            )?,
+        };
+
         let result = self
             .api_client
-            .upload_image_with_moderation_retry(ImageUploadData {
-                image_data: Cow::Owned(data.contents),
-                name: &data.name,
-                description: "Uploaded by Tarmac.",
-                group_id: self.upload_to_group_id,
-            });
+            .upload_image_with_moderation_retry(upload_data);
 
         match result {
             Ok(response) => {
-                log::info!(
-                    "Uploaded {} to ID {}",
-                    &data.name,
-                    response.backing_asset_id
-                );
+                log::info!("Uploaded {} to ID {}", &data.name, response.asset_id);
 
                 Ok(UploadResponse {
-                    id: response.backing_asset_id,
+                    id: response.asset_id,
                 })
             }
 
@@ -170,6 +174,11 @@ pub enum Error {
     RobloxError {
         #[from]
         source: RobloxApiError,
+    },
+    #[error(transparent)]
+    RobloxAuthenticationError {
+        #[from]
+        source: RobloxAuthenticationError,
     },
 }
 

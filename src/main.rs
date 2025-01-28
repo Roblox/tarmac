@@ -10,8 +10,8 @@ mod image;
 mod lua_ast;
 mod options;
 mod roblox_web_api;
+mod roblox_web_api_types;
 mod sync_backend;
-
 use std::{env, panic, process};
 
 use backtrace::Backtrace;
@@ -22,7 +22,7 @@ use crate::options::{Options, Subcommand};
 fn run(options: Options) -> Result<(), anyhow::Error> {
     match options.command {
         Subcommand::UploadImage(upload_options) => {
-            commands::upload_image(options.global, upload_options)
+            commands::upload_image(options.global, upload_options)?
         }
         Subcommand::Sync(sync_options) => commands::sync(options.global, sync_options)?,
         Subcommand::CreateCacheMap(sub_options) => {
