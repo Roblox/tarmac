@@ -286,11 +286,11 @@ impl RobloxApiClient {
             let mut response =
                 self.execute_with_csrf_retry(|client| Ok(client.get(url.as_str()).build()?))?;
             let body = response.text()?;
-            let operation_status_response: RawOperationStatusResponse =
-                match serde_json::from_str(&body) {
-                    Ok(response) => Ok(response),
-                    Err(source) => Err(RobloxApiError::BadResponseJson { body, source }),
-                }?;
+            let operation_status_response: RawOperationStatusResponse = serde_json::from_str(&body)
+                .map_err(|source| RobloxApiError::BadResponseJson {
+                    body: body.clone(),
+                    source,
+                })?;
 
             match operation_status_response.response {
                 Some(variants) => match variants {

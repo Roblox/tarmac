@@ -1,4 +1,3 @@
-use anyhow::Ok;
 use fs_err as fs;
 
 use crate::{
