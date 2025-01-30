@@ -21,7 +21,7 @@ jobs:
         path: target/release/tarmac.exe
 
   macos:
-    runs-on: macos-latest
+    runs-on: macos-13
 
     steps:
     - uses: actions/checkout@v4
