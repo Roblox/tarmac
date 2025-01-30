@@ -7,13 +7,14 @@ use fs_err as fs;
 use crate::asset_name::AssetName;
 use crate::data::Manifest;
 use crate::options::{CreateCacheMapOptions, GlobalOptions};
-use crate::roblox_web_api::RobloxApiClient;
+use crate::roblox_web_api::{RobloxApiClient, RobloxOpenCloudCredentials};
 
 pub fn create_cache_map(
     global: GlobalOptions,
     options: CreateCacheMapOptions,
 ) -> anyhow::Result<()> {
-    let mut api_client = RobloxApiClient::new(global.auth);
+    let credentials = RobloxOpenCloudCredentials::get_credentials(global.auth, global.api_key)?;
+    let mut api_client = RobloxApiClient::new(credentials);
 
     let project_path = match options.project_path {
         Some(path) => path.clone(),

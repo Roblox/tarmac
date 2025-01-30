@@ -1,35 +1,34 @@
-use std::borrow::Cow;
-
 use fs_err as fs;
 
 use crate::{
-    auth_cookie::get_auth_cookie,
     options::{GlobalOptions, UploadImageOptions},
-    roblox_web_api::{ImageUploadData, RobloxApiClient},
+    roblox_web_api::{RobloxApiClient, RobloxOpenCloudCredentials, DECAL},
+    roblox_web_api_types::{ImageUploadData, ImageUploadMetadata},
 };
 
-pub fn upload_image(global: GlobalOptions, options: UploadImageOptions) {
-    let auth = global
-        .auth
-        .clone()
-        .or_else(get_auth_cookie)
-        .expect("no auth cookie found");
-
+pub fn upload_image(
+    global: GlobalOptions,
+    options: UploadImageOptions,
+) -> Result<(), anyhow::Error> {
     let image_data = fs::read(options.path).expect("couldn't read input file");
+    let credentials = RobloxOpenCloudCredentials::get_credentials(global.auth, global.api_key)?;
 
-    let mut client = RobloxApiClient::new(Some(auth));
+    let mut client = RobloxApiClient::new(credentials);
 
     let upload_data = ImageUploadData {
-        image_data: Cow::Owned(image_data),
-        name: &options.name,
-        description: &options.description,
-        group_id: None,
+        image_data: image_data.into(),
+        image_metadata: ImageUploadMetadata::new(
+            DECAL.to_string(),
+            options.name.to_string(),
+            options.description.to_string(),
+            options.user_id,
+            options.group_id,
+        )?,
     };
 
-    let response = client
-        .upload_image(upload_data)
-        .expect("Roblox API request failed");
+    let response = client.upload_image(upload_data)?;
 
     eprintln!("Image uploaded successfully!");
-    println!("{}", response.backing_asset_id);
+    println!("{}", response.asset_id);
+    Ok(())
 }

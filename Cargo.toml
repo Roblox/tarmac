@@ -1,7 +1,7 @@
 [package]
 name = "tarmac"
 description = "Resource compiler and asset manager for Roblox projects"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Lucien Greathouse <me@lpghatguy.com>"]
 edition = "2018"
 license = "MIT"
@@ -19,15 +19,9 @@ panic = "abort"
 panic = "abort"
 
 [workspace]
-members = [
-	".",
-	"packos",
-]
+members = [".", "packos"]
 
-default-members = [
-	".",
-	"packos",
-]
+default-members = [".", "packos"]
 
 [dependencies]
 packos = { path = "packos", version = "0.1.0" }
