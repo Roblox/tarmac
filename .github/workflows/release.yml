@@ -9,13 +9,13 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
 
     - name: Build release binary
       run: cargo build --verbose --locked --release
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v4
       with:
         name: tarmac-win64
         path: target/release/tarmac.exe
@@ -24,7 +24,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
 
     - name: Install Rust
       run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -35,7 +35,7 @@ jobs:
         cargo build --verbose --locked --release
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v4
       with:
         name: tarmac-macos
         path: target/release/tarmac
@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
 
     - name: Build
       run: cargo build --locked --verbose --release
@@ -52,7 +52,7 @@ jobs:
         OPENSSL_STATIC: 1
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v4
       with:
         name: tarmac-linux
         path: target/release/tarmac
