@@ -2,7 +2,7 @@ use fs_err as fs;
 
 use crate::{
     options::{GlobalOptions, UploadImageOptions},
-    roblox_web_api::{RobloxApiClient, RobloxOpenCloudCredentials, DECAL, IMAGE},
+    roblox_web_api::{RobloxApiClient, RobloxOpenCloudCredentials, IMAGE},
     roblox_web_api_types::{ImageUploadData, ImageUploadMetadata},
 };
 
