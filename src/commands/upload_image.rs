@@ -2,7 +2,7 @@ use fs_err as fs;
 
 use crate::{
     options::{GlobalOptions, UploadImageOptions},
-    roblox_web_api::{RobloxApiClient, RobloxOpenCloudCredentials, DECAL},
+    roblox_web_api::{RobloxApiClient, RobloxOpenCloudCredentials, IMAGE},
     roblox_web_api_types::{ImageUploadData, ImageUploadMetadata},
 };
 
@@ -18,7 +18,7 @@ pub fn upload_image(
     let upload_data = ImageUploadData {
         image_data: image_data.into(),
         image_metadata: ImageUploadMetadata::new(
-            DECAL.to_string(),
+            IMAGE.to_string(),
             options.name.to_string(),
             options.description.to_string(),
             options.user_id,

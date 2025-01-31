@@ -1,6 +1,6 @@
 use std::{borrow::Cow, io, path::Path, thread, time::Duration};
 
-use crate::roblox_web_api::{RobloxApiClient, RobloxApiError, DECAL};
+use crate::roblox_web_api::{RobloxApiClient, RobloxApiError, IMAGE};
 use crate::roblox_web_api_types::{
     ImageUploadData, ImageUploadMetadata, RobloxAuthenticationError,
 };
@@ -45,7 +45,7 @@ impl<'a> SyncBackend for RobloxSyncBackend<'a> {
         let upload_data = ImageUploadData {
             image_data: Cow::Owned(data.contents),
             image_metadata: ImageUploadMetadata::new(
-                DECAL.to_string(),
+                IMAGE.to_string(),
                 data.name.to_string(),
                 "Uploaded by Tarmac.".to_string(),
                 None,

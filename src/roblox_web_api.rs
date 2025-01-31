@@ -25,7 +25,7 @@ const OPEN_CLOUD_ASSET_OPERATIONS_USER_AUTH: &str =
 const OPEN_CLOUD_ASSET_OPERATIONS: &str = "https://apis.roblox.com/assets/v1/operations";
 
 const OPEN_CLOUD_API_KEY_HEADER: &str = "X-API-Key";
-pub const DECAL: &str = "Decal";
+pub const IMAGE: &str = "Image";
 
 pub struct RobloxOpenCloudCredentials {
     auth: RobloxOpenCloudAuth,
