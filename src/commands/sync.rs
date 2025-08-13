@@ -689,7 +689,7 @@ impl SyncSession {
 fn is_image_asset(path: &Path) -> bool {
     match path.extension().and_then(|ext| ext.to_str()) {
         // TODO: Expand the definition of images?
-        Some("png") | Some("jpg") => true,
+        Some("png") | Some("jpg") | Some("webp") => true,
 
         _ => false,
     }
